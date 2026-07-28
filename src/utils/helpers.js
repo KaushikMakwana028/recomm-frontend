@@ -318,3 +318,16 @@ export default {
   getRandomItems,
   getImageUrl,
 };
+
+/**
+ * Format status string to title case, removing underscores/hyphens
+ * @param {string} status - Raw status string
+ * @returns {string} Formatted status
+ */
+export const formatStatus = (status) => {
+  if (!status) return "";
+  return status
+    .split(/[_-]/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+};

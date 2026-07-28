@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaSearch, FaTimes } from 'react-icons/fa';
 import { useProducts } from '../context/ProductContext';
-import { debounce } from '../utils/helpers';
+import { debounce, formatPrice, getImageUrl } from '../utils/helpers';
 
 const SearchBar = ({ onClose }) => {
     const [query, setQuery] = useState('');
@@ -110,8 +110,8 @@ const SearchBar = ({ onClose }) => {
                                 role="option"
                             >
                                 <img
-                                    src={product.image}
-                                    alt={product.name}
+                                    src={product.image_url || getImageUrl(product.image)}
+                                    alt={product.name || product.product_name}
                                     className="rounded me-3 flex-shrink-0"
                                     style={{
                                         width: '48px',
@@ -121,14 +121,14 @@ const SearchBar = ({ onClose }) => {
                                 />
                                 <div className="flex-grow-1 text-start overflow-hidden">
                                     <h6 className="mb-0 text-brand-blue text-truncate">
-                                        {product.name}
+                                        {product.name || product.product_name}
                                     </h6>
                                     <small className="text-muted text-capitalize">
-                                        {product.category}
+                                        {product.category || product.category_name}
                                     </small>
                                 </div>
                                 <span className="text-brand-green fw-bold ms-3 flex-shrink-0">
-                                    ${product.price}
+                                    {formatPrice(product.sale_price ?? product.price)}
                                 </span>
                             </button>
                         ))}

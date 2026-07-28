@@ -283,13 +283,41 @@
 
 .oc-status-pill {
     display: inline-block;
-    background: var(--oc-green);
     color: #fff;
     font-size: 0.75rem;
     font-weight: 700;
     text-transform: capitalize;
     padding: 3px 12px;
     border-radius: 999px;
+    background: #6c757d; /* default fallback */
+}
+
+.oc-status-pill--pending {
+    background: #6c757d;
+}
+
+.oc-status-pill--confirmed {
+    background: #0288d1;
+}
+
+.oc-status-pill--processing {
+    background: #7b1fa2;
+}
+
+.oc-status-pill--packed {
+    background: #e65100;
+}
+
+.oc-status-pill--out_for_delivery {
+    background: #00796b;
+}
+
+.oc-status-pill--delivered {
+    background: #2E9E5B;
+}
+
+.oc-status-pill--cancelled {
+    background: #D9534F;
 }
 
 /* ---------- items ---------- */

@@ -527,16 +527,39 @@
     color: #fff;
 }
 
-.pf-badge--success {
+.pf-badge--pending {
+    background: #6c757d;
+    color: #fff;
+}
+
+.pf-badge--confirmed {
+    background: #0288d1;
+    color: #fff;
+}
+
+.pf-badge--processing {
+    background: #7b1fa2;
+    color: #fff;
+}
+
+.pf-badge--packed {
+    background: #e65100;
+    color: #fff;
+}
+
+.pf-badge--out-for-delivery {
+    background: #00796b;
+    color: #fff;
+}
+
+.pf-badge--delivered {
     background: #2E9E5B;
+    color: #fff;
 }
 
-.pf-badge--info {
-    background: #2E7CD6;
-}
-
-.pf-badge--danger {
+.pf-badge--cancelled {
     background: #D9534F;
+    color: #fff;
 }
 
 .pf-badge--warning {

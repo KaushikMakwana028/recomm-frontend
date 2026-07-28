@@ -11,7 +11,7 @@ import {
   FaRegCopy,
   FaCheck,
 } from "react-icons/fa";
-import { formatPrice, formatDate, getImageUrl } from "../utils/helpers";
+import { formatPrice, formatDate, getImageUrl, formatStatus } from "../utils/helpers";
 import { useOrder } from "../context/OrderContext";
 import { useProducts } from "../context/ProductContext";
 import "../styles/OrderConfirmation.css";
@@ -159,9 +159,26 @@ const OrderConfirmation = () => {
       }) || [],
   };
 
-  // Only the first step ("Order Placed") is complete for a freshly placed order.
-  // Swap this for real status-driven logic once the backend exposes a status timeline.
-  const activeStepIndex = 0;
+  // Calculate active step index based on backend order status
+  const getActiveStepIndex = (status) => {
+    switch (status?.toLowerCase()) {
+      case "pending":
+        return 0;
+      case "confirmed":
+      case "processing":
+      case "packed":
+        return 1;
+      case "out_for_delivery":
+        return 2;
+      case "delivered":
+        return 3;
+      case "cancelled":
+      default:
+        return -1;
+    }
+  };
+
+  const activeStepIndex = getActiveStepIndex(order.status);
 
   const handleCopyOrderId = async () => {
     try {
@@ -236,11 +253,13 @@ const OrderConfirmation = () => {
                         </span>
                         <span className="oc-timeline-label">{step.label}</span>
                         <span className="oc-timeline-sub">
-                          {index === activeStepIndex
+                          {index === 0
                             ? formatDate(order.createdAt)
-                            : isDone
-                              ? ""
-                              : "Pending"}
+                            : index === activeStepIndex
+                              ? formatDate(orderData.updated_at || order.createdAt)
+                              : isDone
+                                ? "Completed"
+                                : "Pending"}
                         </span>
                       </div>
                     );
@@ -298,12 +317,14 @@ const OrderConfirmation = () => {
                             : "Next Day"}
                       </span>
                     </div>
-                    <div className="oc-detail-row">
-                      <span className="oc-label">Status</span>
-                      <span className="oc-value">
-                        <span className="oc-status-pill">{order.status}</span>
-                      </span>
-                    </div>
+                     <div className="oc-detail-row">
+                       <span className="oc-label">Status</span>
+                       <span className="oc-value">
+                         <span className={`oc-status-pill oc-status-pill--${String(order.status || "").toLowerCase().replace(/\s+/g, "_")}`}>
+                           {formatStatus(order.status)}
+                         </span>
+                       </span>
+                     </div>
                     <div className="oc-detail-row">
                       <span className="oc-label">Date</span>
                       <span className="oc-value">

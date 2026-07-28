@@ -20,7 +20,7 @@ import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
 import { useOrder } from "../context/OrderContext";
 import { useToast } from "../context/ToastContext";
-import { formatPrice, formatDate } from "../utils/helpers";
+import { formatPrice, formatDate, formatStatus } from "../utils/helpers";
 import "../styles/Profile.css";
 
 const Profile = () => {
@@ -322,14 +322,26 @@ const Profile = () => {
     { id: "security", label: "Security", icon: FaLock },
   ];
 
-  const statusBadgeClass = (status) =>
-    status === "delivered"
-      ? "pf-badge--success"
-      : status === "shipped"
-        ? "pf-badge--info"
-        : status === "cancelled"
-          ? "pf-badge--danger"
-          : "pf-badge--warning";
+  const statusBadgeClass = (status) => {
+    switch (status?.toLowerCase()) {
+      case "pending":
+        return "pf-badge--pending";
+      case "confirmed":
+        return "pf-badge--confirmed";
+      case "processing":
+        return "pf-badge--processing";
+      case "packed":
+        return "pf-badge--packed";
+      case "out_for_delivery":
+        return "pf-badge--out-for-delivery";
+      case "delivered":
+        return "pf-badge--delivered";
+      case "cancelled":
+        return "pf-badge--cancelled";
+      default:
+        return "pf-badge--warning";
+    }
+  };
 
   return (
     <div className="profile-page">
@@ -680,7 +692,7 @@ const Profile = () => {
                                   <span
                                     className={`pf-badge ${statusBadgeClass(order.status)}`}
                                   >
-                                    {order.status}
+                                    {formatStatus(order.status)}
                                   </span>
                                 </td>
                                 <td>
@@ -714,7 +726,7 @@ const Profile = () => {
                               <span
                                 className={`pf-badge ${statusBadgeClass(order.status)}`}
                               >
-                                {order.status}
+                                {formatStatus(order.status)}
                               </span>
                             </div>
                             <div className="pf-order-card-meta">
