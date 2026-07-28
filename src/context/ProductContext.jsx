@@ -38,7 +38,7 @@ export const ProductProvider = ({ children }) => {
     const loadProducts = async () => {
         try {
             setLoading(true);
-            const response = await ProductService.getAllProducts();
+            const response = await ProductService.getProductList();
 
             if (response.success) {
                 setProducts(response.data);

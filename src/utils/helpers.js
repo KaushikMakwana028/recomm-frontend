@@ -275,6 +275,25 @@ export const getRandomItems = (array, count) => {
   return shuffled.slice(0, count);
 };
 
+/**
+ * Get full image URL, falling back to a default if not found
+ * @param {string} path - Image path
+ * @returns {string} Full image URL
+ */
+export const getImageUrl = (path) => {
+  const FALLBACK_IMG = "https://images.unsplash.com/photo-1542838132-92c53300491e?w=400";
+  if (!path) return FALLBACK_IMG;
+  
+  const trimmed = String(path).trim();
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    return trimmed;
+  }
+  
+  // Prepend backend base URL (excluding the api part)
+  const cleanPath = trimmed.startsWith("/") ? trimmed.slice(1) : trimmed;
+  return `http://localhost/kaushik_php/ci_project/recomm/${cleanPath}`;
+};
+
 export default {
   formatPrice,
   calculateDiscount,
@@ -297,4 +316,5 @@ export default {
   isValidEmail,
   generateStars,
   getRandomItems,
+  getImageUrl,
 };

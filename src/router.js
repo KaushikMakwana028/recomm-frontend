@@ -15,6 +15,7 @@ const Login = lazy(() => import("./pages/Login"));
 const Signup = lazy(() => import("./pages/Signup"));
 const Profile = lazy(() => import("./pages/Profile"));
 const Wishlist = lazy(() => import("./pages/Wishlist"));
+const Search = lazy(() => import("./pages/Search"));
 
 // Full-page Loading Spinner
 const PageLoader = () => (
@@ -140,6 +141,15 @@ const AppRouter = () => {
           element={
             <Layout>
               <Wishlist />
+            </Layout>
+          }
+        />
+
+        <Route
+          path="/search"
+          element={
+            <Layout>
+              <Search />
             </Layout>
           }
         />

@@ -114,7 +114,7 @@ const Products = () => {
     setError("");
 
     const result = selectedCategoryId
-      ? await ProductService.getProductsByCategory(selectedCategoryId)
+      ? await CategoryService.getProductsByCategory(selectedCategoryId)
       : await ProductService.getProductList({ search: searchQuery });
 
     if (result.success) {
@@ -206,7 +206,7 @@ const Products = () => {
   return (
     <div className="products-page bg-light">
       <style>{`
-        .pr-wrap { padding: 1.75rem 0 3rem; }
+        .pr-wrap { padding-top: 1.75rem; padding-bottom: 3rem; }
         .pr-title { color: ${NAVY}; font-weight: 800; }
         .pr-breadcrumb a { color: #6c7a90; text-decoration: none; }
         .pr-breadcrumb a:hover { color: ${NAVY}; }
@@ -377,7 +377,7 @@ const Products = () => {
 
         @media (max-width: 575.98px) {
           .pr-title { font-size: 1.4rem; }
-          .pr-wrap { padding: 1.1rem 0 2rem; }
+          .pr-wrap { padding-top: 1.1rem; padding-bottom: 2rem; }
           .pr-toolbar { flex-wrap: wrap; }
           .pr-sort-select { font-size: 0.8rem !important; padding: 0.5rem !important; }
         }

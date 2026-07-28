@@ -9,7 +9,8 @@ import {
 } from "react-icons/fa";
 import { useWishlist } from "../context/WishlistContext";
 import { useCart } from "../context/CartContext";
-import { formatPrice } from "../utils/helpers";
+import { useToast } from "../context/ToastContext";
+import { formatPrice, getImageUrl } from "../utils/helpers";
 
 const NAVY = "#00204E";
 const GREEN = "#34A129";
@@ -17,17 +18,20 @@ const GREEN = "#34A129";
 const Wishlist = () => {
   const { wishlistItems, removeFromWishlist, clearWishlist } = useWishlist();
   const { addToCart } = useCart();
+  const { showToast } = useToast();
 
   const handleMoveToCart = (product) => {
     addToCart(product, 1);
     removeFromWishlist(product.id);
   };
 
-  const handleAddAllToCart = () => {
-    wishlistItems.forEach((item) => {
-      addToCart(item, 1);
-    });
-    clearWishlist();
+  const handleAddAllToCart = async () => {
+    if (wishlistItems.length === 0) return;
+    for (const item of wishlistItems) {
+      await addToCart(item, 1, true);
+    }
+    await clearWishlist();
+    showToast("Added all wishlist items to cart!", "success");
   };
 
   if (wishlistItems.length === 0) {
@@ -75,7 +79,7 @@ const Wishlist = () => {
   return (
     <div className="wl-page bg-light">
       <style>{`
-        .wl-wrap { padding: 1.75rem 0 3rem; }
+        .wl-wrap { padding-top: 1.75rem; padding-bottom: 3rem; }
         .wl-title { color: ${NAVY}; font-weight: 800; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
         .wl-count-badge {
           background: rgba(52,161,41,0.12); color: ${GREEN}; font-size: 0.72rem; font-weight: 800;
@@ -157,7 +161,7 @@ const Wishlist = () => {
 
         @media (max-width: 575.98px) {
           .wl-title { font-size: 1.25rem; }
-          .wl-wrap { padding: 1.1rem 0 2rem; }
+          .wl-wrap { padding-top: 1.1rem; padding-bottom: 2rem; }
           .wl-actions { width: 100%; }
           .wl-actions button { flex: 1; justify-content: center; }
         }
@@ -207,7 +211,7 @@ const Wishlist = () => {
                 <div className="wl-img-wrap">
                   <Link to={`/product/${product.id}`}>
                     <img
-                      src={product.image}
+                      src={getImageUrl(product.image)}
                       alt={product.name}
                       loading="lazy"
                     />

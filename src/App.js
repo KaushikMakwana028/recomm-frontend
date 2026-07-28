@@ -1,14 +1,16 @@
-import React, { useEffect } from 'react';
-import { BrowserRouter } from 'react-router-dom';
+import React, { useEffect } from "react";
+import { BrowserRouter } from "react-router-dom";
 
 // Context Providers
-import { AuthProvider } from './context/AuthContext';
-import { ProductProvider } from './context/ProductContext';
-import { CartProvider } from './context/CartContext';
-import { WishlistProvider } from './context/WishlistContext';
+import { AuthProvider } from "./context/AuthContext";
+import { ProductProvider } from "./context/ProductContext";
+import { CartProvider } from "./context/CartContext";
+import { WishlistProvider } from "./context/WishlistContext";
+import { OrderProvider } from "./context/OrderContext";
+import { ToastProvider } from "./context/ToastContext";
 
 // Router
-import AppRouter from './router';
+import AppRouter from "./router";
 
 // ─── All brand styles injected via JS to bypass PostCSS pipeline ───────────
 const GLOBAL_STYLES = `
@@ -172,17 +174,174 @@ const GLOBAL_STYLES = `
   .transition-all   { transition: all 0.3s ease; }
   .object-fit-cover { object-fit: cover; }
   .min-vh-70        { min-height: 70vh; }
+
+  /* ── Custom Toast & Alerts ──────────────────────────────── */
+  .toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 11000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+  }
+
+  .toast-item {
+    pointer-events: auto;
+    min-width: 300px;
+    max-width: 400px;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-left: 5px solid #34A129;
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0, 32, 78, 0.15);
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    animation: toastSlideIn 0.3s cubic-bezier(0.68, -0.55, 0.27, 1.55) forwards;
+    transition: all 0.3s ease;
+  }
+
+  .toast-item.toast-error {
+    border-left-color: #dc3545;
+  }
+
+  .toast-item.toast-info {
+    border-left-color: #0d6efd;
+  }
+
+  .toast-item.toast-warning {
+    border-left-color: #ffc107;
+  }
+
+  .toast-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #00204E;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+
+  .toast-close {
+    background: none;
+    border: none;
+    color: #98a2b8;
+    cursor: pointer;
+    font-size: 1.1rem;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s ease;
+  }
+
+  .toast-close:hover {
+    color: #00204E;
+  }
+
+  @keyframes toastSlideIn {
+    from {
+      opacity: 0;
+      transform: translateX(100px) scale(0.9);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0) scale(1);
+    }
+  }
+
+  /* ── Big Alert Modal ────────────────────────────────────── */
+  .big-alert-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 32, 78, 0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 12000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.3s ease-out forwards;
+  }
+
+  .big-alert-box {
+    background: #ffffff;
+    border-radius: 20px;
+    box-shadow: 0 20px 50px rgba(0, 32, 78, 0.3);
+    padding: 40px;
+    width: 90%;
+    max-width: 480px;
+    text-align: center;
+    animation: scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  }
+
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.8);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  /* Success Checkmark Animation */
+  .checkmark-wrapper {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: rgba(52, 161, 41, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 24px;
+  }
+
+  .checkmark-circle {
+    stroke-dasharray: 166;
+    stroke-dashoffset: 166;
+    stroke-width: 2;
+    stroke-miterlimit: 10;
+    stroke: #34A129;
+    fill: none;
+    animation: stroke 0.6s cubic-bezier(0.65, 0, 0.45, 1) forwards;
+  }
+
+  .checkmark-check {
+    transform-origin: 50% 50%;
+    stroke-dasharray: 48;
+    stroke-dashoffset: 48;
+    stroke: #34A129;
+    stroke-width: 3;
+    fill: none;
+    animation: stroke 0.3s cubic-bezier(0.65, 0, 0.45, 1) 0.6s forwards;
+  }
+
+  @keyframes stroke {
+    100% {
+      stroke-dashoffset: 0;
+    }
+  }
 `;
 
 // ─── Inject <style> into <head> once ───────────────────────────────────────
 const StyleInjector = () => {
   useEffect(() => {
-    const styleId = 'recomm-global-styles';
+    const styleId = "recomm-global-styles";
 
     // Avoid duplicate injection
     if (document.getElementById(styleId)) return;
 
-    const styleEl = document.createElement('style');
+    const styleEl = document.createElement("style");
     styleEl.id = styleId;
     styleEl.textContent = GLOBAL_STYLES;
     document.head.appendChild(styleEl);
@@ -201,15 +360,19 @@ const App = () => {
   return (
     <BrowserRouter>
       <StyleInjector />
-      <AuthProvider>
-        <ProductProvider>
-          <CartProvider>
-            <WishlistProvider>
-              <AppRouter />
-            </WishlistProvider>
-          </CartProvider>
-        </ProductProvider>
-      </AuthProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <ProductProvider>
+            <CartProvider>
+              <WishlistProvider>
+                <OrderProvider>
+                  <AppRouter />
+                </OrderProvider>
+              </WishlistProvider>
+            </CartProvider>
+          </ProductProvider>
+        </AuthProvider>
+      </ToastProvider>
     </BrowserRouter>
   );
 };

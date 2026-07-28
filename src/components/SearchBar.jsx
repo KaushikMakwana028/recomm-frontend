@@ -16,8 +16,8 @@ const SearchBar = ({ onClose }) => {
                 const filtered = products
                     .filter(
                         (product) =>
-                            product.name.toLowerCase().includes(query.toLowerCase()) ||
-                            product.category.toLowerCase().includes(query.toLowerCase()) ||
+                            (product.name || product.product_name || "").toLowerCase().includes(query.toLowerCase()) ||
+                            (product.category || product.category_name || "").toLowerCase().includes(query.toLowerCase()) ||
                             (product.tags &&
                                 product.tags.some((tag) =>
                                     tag.toLowerCase().includes(query.toLowerCase())
@@ -36,7 +36,7 @@ const SearchBar = ({ onClose }) => {
     const handleSearch = (e) => {
         e.preventDefault();
         if (query.trim()) {
-            navigate(`/products?search=${encodeURIComponent(query.trim())}`);
+            navigate(`/search?q=${encodeURIComponent(query.trim())}`);
             setQuery('');
             setSuggestions([]);
             if (onClose) onClose();

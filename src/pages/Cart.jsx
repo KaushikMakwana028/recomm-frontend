@@ -11,7 +11,7 @@ import {
 } from "react-icons/fa";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
-import { formatPrice } from "../utils/helpers";
+import { formatPrice, getImageUrl } from "../utils/helpers";
 
 const NAVY = "#00204E";
 const GREEN = "#34A129";
@@ -84,7 +84,7 @@ const Cart = () => {
   return (
     <div className="ct-page bg-light">
       <style>{`
-        .ct-wrap { padding: 1.75rem 0 3rem; }
+        .ct-wrap { padding-top: 1.75rem; padding-bottom: 3rem; }
         .ct-title { color: ${NAVY}; font-weight: 800; }
         .ct-breadcrumb a { color: #6c7a90; text-decoration: none; }
         .ct-breadcrumb a:hover { color: ${NAVY}; }
@@ -224,7 +224,7 @@ const Cart = () => {
 
         @media (max-width: 575.98px) {
           .ct-title { font-size: 1.4rem; }
-          .ct-wrap { padding: 1.1rem 0 2rem; }
+          .ct-wrap { padding-top: 1.1rem; padding-bottom: 2rem; }
           .ct-item-row { padding: 0.9rem; gap: 0.7rem; flex-wrap: wrap; }
           .ct-item-img { width: 64px; height: 64px; }
           .ct-item-info { width: calc(100% - 64px - 0.7rem - 34px); }
@@ -265,7 +265,7 @@ const Cart = () => {
                 {cartItems.map((item) => (
                   <div className="ct-item-row" key={item.id}>
                     <div className="ct-item-img">
-                      <img src={item.image} alt={item.name} />
+                      <img src={getImageUrl(item.image)} alt={item.name} />
                     </div>
 
                     <div className="ct-item-info">

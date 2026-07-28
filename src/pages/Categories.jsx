@@ -80,7 +80,7 @@ const Categories = () => {
   return (
     <div className="categories-page">
       <style>{`
-        .cp-wrap { padding: 2rem 0 3.5rem; }
+        .cp-wrap { padding-top: 2rem; padding-bottom: 3.5rem; }
 
         .cp-breadcrumb { font-size: 0.85rem; }
         .cp-breadcrumb a { color: #6c7a90; text-decoration: none; }
@@ -174,7 +174,7 @@ const Categories = () => {
 
         @media (max-width: 575.98px) {
           .cp-hero h2 { font-size: 1.5rem; }
-          .cp-wrap { padding: 1.25rem 0 2.5rem; }
+          .cp-wrap { padding-top: 1.25rem; padding-bottom: 2.5rem; }
         }
       `}</style>
 
@@ -302,11 +302,13 @@ const Categories = () => {
                   <div key={product.id} className="col-6 col-md-4 col-lg-3">
                     <div className="cp-product-card card">
                       <div className="cp-product-img-wrap">
-                        <img
-                          src={product.image_url || FALLBACK_IMG}
-                          alt={product.name}
-                          loading="lazy"
-                        />
+                        <Link to={`/product/${product.id}`} className="d-block w-100 h-100">
+                          <img
+                            src={product.image_url || FALLBACK_IMG}
+                            alt={product.name}
+                            loading="lazy"
+                          />
+                        </Link>
                         <button
                           className="cp-wish-btn"
                           onClick={() => toggleWishlist(product)}

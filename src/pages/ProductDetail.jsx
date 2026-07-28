@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { FaShoppingCart, FaHeart, FaMinus, FaPlus } from "react-icons/fa";
+import { FaShoppingCart, FaHeart, FaMinus, FaPlus, FaUser, FaMapMarkerAlt, FaPhone, FaClock } from "react-icons/fa";
 import ProductService from "../services/productService";
+import CategoryService from "../services/categoryService";
 import { useCart } from "../context/CartContext";
 import { useWishlist } from "../context/WishlistContext";
 import { formatPrice } from "../utils/helpers";
@@ -51,7 +52,7 @@ const ProductDetail = () => {
       return;
     }
     setRelatedLoading(true);
-    const result = await ProductService.getProductsByCategory(currentProduct.category_id);
+    const result = await CategoryService.getProductsByCategory(currentProduct.category_id);
     if (result.success) {
       const filtered = (result.data || []).filter(
         (p) => String(p.id) !== String(currentProduct.id),
@@ -101,7 +102,7 @@ const ProductDetail = () => {
   return (
     <div className="product-detail-page bg-light">
       <style>{`
-        .pd-wrap { padding: 1.75rem 0 3rem; }
+        .pd-wrap { padding-top: 1.75rem; padding-bottom: 3rem; }
         .pd-breadcrumb a { color: #6c7a90; text-decoration: none; }
         .pd-breadcrumb a:hover { color: ${NAVY}; }
         .pd-breadcrumb .active { color: ${GREEN}; font-weight: 600; }
@@ -177,6 +178,54 @@ const ProductDetail = () => {
         .pd-related-price { color: ${GREEN}; font-weight: 700; }
         .pd-related-btn { background: ${GREEN}; border-color: ${GREEN}; font-weight: 600; }
         .pd-related-btn:hover { background: #2c8c22; border-color: #2c8c22; }
+
+        .pd-vendor-card {
+          border: 1px solid #dde3ec;
+          border-radius: 12px;
+          padding: 1.25rem;
+          background: #fdfdfd;
+          box-shadow: 0 2px 8px rgba(0,32,78,0.03);
+        }
+        .pd-vendor-title {
+          font-weight: 700;
+          color: ${NAVY};
+          font-size: 0.85rem;
+          margin-bottom: 0.75rem;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+        .pd-vendor-photo-wrap {
+          width: 70px;
+          height: 70px;
+          border-radius: 10px;
+          overflow: hidden;
+          background: #f4f6f9;
+          border: 1px solid #dde3ec;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+        .pd-vendor-photo-wrap img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+        .pd-vendor-name {
+          font-weight: 700;
+          color: ${NAVY};
+          font-size: 1.1rem;
+          margin-bottom: 0.4rem;
+          text-transform: capitalize;
+        }
+        .pd-vendor-detail {
+          font-size: 0.85rem;
+          color: #6c7a90;
+          margin-bottom: 0.2rem;
+        }
+        .pd-vendor-detail strong {
+          color: ${NAVY};
+        }
 
         @media (max-width: 767.98px) {
           .pd-desktop-actions { display: none; }
@@ -255,6 +304,51 @@ const ProductDetail = () => {
                 <p className="text-muted mb-4">
                   {product.description || DEFAULT_DESCRIPTION}
                 </p>
+
+                {product.store_name && (
+                  <div className="pd-vendor-card mb-4">
+                    <div className="pd-vendor-title">Seller Information</div>
+                    <div className="d-flex align-items-start gap-3">
+                      {product.store_photo_url && (
+                        <div className="pd-vendor-photo-wrap">
+                          <img
+                            src={product.store_photo_url}
+                            alt={product.store_name}
+                          />
+                        </div>
+                      )}
+                      <div className="flex-grow-1">
+                        <div className="pd-vendor-name">{product.store_name}</div>
+                        {product.vendor_name && (
+                          <div className="pd-vendor-detail d-flex align-items-center gap-2">
+                            <FaUser size={12} className="text-muted" />
+                            <span><strong>Merchant:</strong> {product.vendor_name}</span>
+                          </div>
+                        )}
+                        {product.store_contact && (
+                          <div className="pd-vendor-detail d-flex align-items-center gap-2">
+                            <FaPhone size={12} className="text-muted" />
+                            <span><strong>Contact:</strong> {product.store_contact}</span>
+                          </div>
+                        )}
+                        {product.store_address && (
+                          <div className="pd-vendor-detail d-flex align-items-center gap-2">
+                            <FaMapMarkerAlt size={12} className="text-muted" />
+                            <span><strong>Location:</strong> {product.store_address}</span>
+                          </div>
+                        )}
+                        {product.store_opening_time && product.store_closing_time && (
+                          <div className="pd-vendor-detail d-flex align-items-center gap-2">
+                            <FaClock size={12} className="text-muted" />
+                            <span>
+                              <strong>Hours:</strong> {product.store_opening_time.substring(0, 5)} - {product.store_closing_time.substring(0, 5)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div className="mb-4">
                   <label className="form-label fw-bold" style={{ color: NAVY }}>

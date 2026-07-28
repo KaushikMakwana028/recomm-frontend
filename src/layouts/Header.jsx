@@ -29,7 +29,7 @@ const NAV_LINKS = [
   { label: "Home", to: "/", icon: FaHome },
   { label: "Products", to: "/products", icon: FaBoxOpen },
   { label: "Categories", to: "/categories", icon: FaThLarge },
-  { label: "Deals", to: "/products?deals=true", icon: FaTags },
+  // { label: "Deals", to: "/products?deals=true", icon: FaTags },
 ];
 
 const Header = () => {

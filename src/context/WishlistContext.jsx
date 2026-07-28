@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import WishlistService from "../services/wishlistService";
+import ProductService from "../services/productService";
 import { useAuth } from "./AuthContext";
+import { useToast } from "./ToastContext";
 
 const WishlistContext = createContext();
 const GUEST_WISHLIST_KEY = "guest_wishlist";
@@ -36,14 +38,49 @@ const mapApiItem = (row) => ({
 
 export const WishlistProvider = ({ children }) => {
   const { isAuthenticated } = useAuth();
+  const { showToast } = useToast();
   const [wishlistItems, setWishlistItems] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  const healGuestWishlist = async (items) => {
+    if (!items || items.length === 0) return items;
+    const needsHealing = items.some((item) => !item.image || !item.category);
+    if (!needsHealing) return items;
+
+    try {
+      const result = await ProductService.getProductList();
+      if (result.success && result.data) {
+        const products = result.data;
+        const healed = items.map((item) => {
+          if (!item.image || !item.category) {
+            const match = products.find((p) => String(p.id) === String(item.id));
+            if (match) {
+              return {
+                ...item,
+                image: item.image || match.image_url || match.image,
+                category: item.category || match.category_name,
+              };
+            }
+          }
+          return item;
+        });
+        writeGuestWishlist(healed);
+        return healed;
+      }
+    } catch (e) {
+      console.error("Failed to heal guest wishlist:", e);
+    }
+    return items;
+  };
 
   useEffect(() => {
     if (isAuthenticated) {
       syncGuestWishlistThenLoad();
     } else {
-      setWishlistItems(readGuestWishlist());
+      const guestItems = readGuestWishlist();
+      healGuestWishlist(guestItems).then((healedItems) => {
+        setWishlistItems(healedItems);
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
@@ -72,7 +109,10 @@ export const WishlistProvider = ({ children }) => {
   const addToWishlist = async (product, quantity = 1) => {
     if (isAuthenticated) {
       const result = await WishlistService.addToWishlistApi(product.id, quantity);
-      if (result.success) await loadServerWishlist();
+      if (result.success) {
+        await loadServerWishlist();
+        showToast(`Saved "${product.name}" to Wishlist!`, "success");
+      }
       return result;
     }
 
@@ -85,26 +125,34 @@ export const WishlistProvider = ({ children }) => {
         id: product.id,
         name: product.name,
         price: product.price,
-        image: product.image_url,
+        image: product.image_url || product.image,
         category: product.category_name,
         quantity,
       },
     ];
     writeGuestWishlist(updated);
     setWishlistItems(updated);
+    showToast(`Saved "${product.name}" to Wishlist!`, "success");
     return { success: true };
   };
 
   const removeFromWishlist = async (productId) => {
+    const item = wishlistItems.find(i => i.id === productId);
+    const productName = item ? item.name : "Product";
+
     if (isAuthenticated) {
       const result = await WishlistService.removeFromWishlistApi(productId);
-      if (result.success) await loadServerWishlist();
+      if (result.success) {
+        await loadServerWishlist();
+        showToast(`Removed "${productName}" from Wishlist.`, "info");
+      }
       return result;
     }
 
     const updated = readGuestWishlist().filter((i) => i.id !== productId);
     writeGuestWishlist(updated);
     setWishlistItems(updated);
+    showToast(`Removed "${productName}" from Wishlist.`, "info");
     return { success: true };
   };
 

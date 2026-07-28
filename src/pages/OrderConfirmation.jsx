@@ -1,297 +1,448 @@
-import React, { useEffect } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState, useCallback } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
-    FaCheckCircle,
-    FaTruck,
-    FaBox,
-    FaEnvelope,
-    FaHome,
-    FaShoppingBag,
-    FaPrint,
-} from 'react-icons/fa';
-import { formatPrice, formatDate } from '../utils/helpers';
+  FaCheckCircle,
+  FaTruck,
+  FaBox,
+  FaEnvelope,
+  FaHome,
+  FaShoppingBag,
+  FaPrint,
+  FaRegCopy,
+  FaCheck,
+} from "react-icons/fa";
+import { formatPrice, formatDate, getImageUrl } from "../utils/helpers";
+import { useOrder } from "../context/OrderContext";
+import { useProducts } from "../context/ProductContext";
+import "../styles/OrderConfirmation.css";
+
+const STATUS_STEPS = [
+  { key: "placed", label: "Order Placed", icon: FaCheckCircle },
+  { key: "processing", label: "Processing", icon: FaBox },
+  { key: "shipped", label: "Shipped", icon: FaTruck },
+  { key: "delivered", label: "Delivered", icon: FaHome },
+];
 
 const OrderConfirmation = () => {
-    const location = useLocation();
-    const navigate = useNavigate();
-    const order = location.state?.order;
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { fetchOrderDetails } = useOrder();
+  const { products } = useProducts();
 
-    useEffect(() => {
-        if (!order) {
-            navigate('/');
+  const [orderData, setOrderData] = useState(location.state?.order || null);
+  const [apiLoading, setApiLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const loadOrderDetails = useCallback(
+    async (orderId) => {
+      setApiLoading(true);
+      try {
+        const result = await fetchOrderDetails(orderId);
+        if (result && result.success) {
+          setOrderData(result.data);
+        } else {
+          console.error("Failed to load order details:", result?.error);
         }
-        window.scrollTo(0, 0);
-    }, [order, navigate]);
+      } catch (err) {
+        console.error("Error loading order details:", err);
+      } finally {
+        setApiLoading(false);
+      }
+    },
+    [fetchOrderDetails],
+  );
 
-    if (!order) return null;
+  useEffect(() => {
+    if (!orderData) {
+      // Check session storage to survive page refreshes
+      const savedOrderId = sessionStorage.getItem("last_order_id");
+      if (savedOrderId) {
+        loadOrderDetails(savedOrderId);
+      } else {
+        navigate("/");
+      }
+    } else {
+      const orderId = orderData.order_id || orderData.id;
+      if (orderId) {
+        sessionStorage.setItem("last_order_id", orderId);
+      }
+      // Fetch complete details if it's a summary order (missing items list or address)
+      if (
+        !orderData.delivery_address ||
+        !orderData.items ||
+        orderData.items.length === 0 ||
+        orderData.subtotal === undefined
+      ) {
+        loadOrderDetails(orderId);
+      }
+    }
+    window.scrollTo(0, 0);
+  }, [orderData, navigate, loadOrderDetails]);
 
+  const isFullOrder =
+    orderData &&
+    orderData.items &&
+    orderData.items.length > 0 &&
+    orderData.delivery_address;
+
+  if (apiLoading && !isFullOrder) {
     return (
-        <div className="order-confirmation-page bg-light py-5">
-            <div className="container">
-                <div className="row justify-content-center">
-                    <div className="col-lg-8">
-                        {/* Success Header Card */}
-                        <div className="card border-0 shadow-sm mb-4 text-center fade-in">
-                            <div className="card-body py-5">
-                                <div
-                                    className="rounded-circle bg-brand-green d-inline-flex align-items-center justify-content-center mb-4"
-                                    style={{ width: '100px', height: '100px' }}
-                                >
-                                    <FaCheckCircle size={60} className="text-white" />
-                                </div>
-
-                                <h1 className="text-brand-blue fw-bold mb-2">Order Confirmed!</h1>
-                                <p className="text-muted fs-5 mb-3">
-                                    Thank you for your purchase. Your order has been received.
-                                </p>
-
-                                <div className="badge bg-brand-green fs-6 px-4 py-2 mb-3">
-                                    Order #{order.id}
-                                </div>
-
-                                <div className="alert alert-info mt-3 mx-auto" style={{ maxWidth: '400px' }}>
-                                    <FaEnvelope className="me-2" />
-                                    A confirmation email has been sent to{' '}
-                                    <strong>{order.shipping?.email}</strong>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Order Status Timeline */}
-                        <div className="card border-0 shadow-sm mb-4">
-                            <div className="card-header bg-brand-blue text-white">
-                                <h5 className="mb-0">Order Status</h5>
-                            </div>
-                            <div className="card-body py-4">
-                                <div className="row text-center">
-                                    <div className="col-3">
-                                        <div
-                                            className="rounded-circle bg-brand-green d-inline-flex align-items-center justify-content-center mb-2"
-                                            style={{ width: '50px', height: '50px' }}
-                                        >
-                                            <FaCheckCircle className="text-white" size={20} />
-                                        </div>
-                                        <p className="mb-0 small fw-bold text-brand-green">Order Placed</p>
-                                        <small className="text-muted">{formatDate(order.createdAt)}</small>
-                                    </div>
-
-                                    <div className="col-3">
-                                        <div
-                                            className="rounded-circle bg-light border d-inline-flex align-items-center justify-content-center mb-2"
-                                            style={{ width: '50px', height: '50px' }}
-                                        >
-                                            <FaBox className="text-muted" size={20} />
-                                        </div>
-                                        <p className="mb-0 small fw-bold text-muted">Processing</p>
-                                        <small className="text-muted">Pending</small>
-                                    </div>
-
-                                    <div className="col-3">
-                                        <div
-                                            className="rounded-circle bg-light border d-inline-flex align-items-center justify-content-center mb-2"
-                                            style={{ width: '50px', height: '50px' }}
-                                        >
-                                            <FaTruck className="text-muted" size={20} />
-                                        </div>
-                                        <p className="mb-0 small fw-bold text-muted">Shipped</p>
-                                        <small className="text-muted">Pending</small>
-                                    </div>
-
-                                    <div className="col-3">
-                                        <div
-                                            className="rounded-circle bg-light border d-inline-flex align-items-center justify-content-center mb-2"
-                                            style={{ width: '50px', height: '50px' }}
-                                        >
-                                            <FaHome className="text-muted" size={20} />
-                                        </div>
-                                        <p className="mb-0 small fw-bold text-muted">Delivered</p>
-                                        <small className="text-muted">Pending</small>
-                                    </div>
-                                </div>
-
-                                {/* Progress Bar */}
-                                <div className="progress mt-3" style={{ height: '4px' }}>
-                                    <div
-                                        className="progress-bar bg-brand-green"
-                                        role="progressbar"
-                                        style={{ width: '12%' }}
-                                        aria-valuenow="12"
-                                        aria-valuemin="0"
-                                        aria-valuemax="100"
-                                    ></div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Order Details */}
-                        <div className="card border-0 shadow-sm mb-4">
-                            <div className="card-header bg-white">
-                                <h5 className="text-brand-blue mb-0">Order Details</h5>
-                            </div>
-                            <div className="card-body">
-                                <div className="row g-4">
-                                    {/* Shipping Info */}
-                                    <div className="col-md-6">
-                                        <h6 className="text-brand-green mb-3">Shipping Address</h6>
-                                        <div className="bg-light rounded p-3">
-                                            <p className="mb-1 fw-bold">{order.shipping?.fullName}</p>
-                                            <p className="mb-1">{order.shipping?.addressLine1}</p>
-                                            {order.shipping?.addressLine2 && (
-                                                <p className="mb-1">{order.shipping.addressLine2}</p>
-                                            )}
-                                            <p className="mb-1">
-                                                {order.shipping?.city}, {order.shipping?.state}{' '}
-                                                {order.shipping?.zipCode}
-                                            </p>
-                                            <p className="mb-1">{order.shipping?.country}</p>
-                                            <p className="mb-0 text-muted">📞 {order.shipping?.phone}</p>
-                                        </div>
-                                    </div>
-
-                                    {/* Payment & Delivery Info */}
-                                    <div className="col-md-6">
-                                        <h6 className="text-brand-green mb-3">Payment & Delivery</h6>
-                                        <div className="bg-light rounded p-3">
-                                            <p className="mb-2">
-                                                <strong>Payment:</strong>{' '}
-                                                Card ending in ****{order.payment?.last4}
-                                            </p>
-                                            <p className="mb-2">
-                                                <strong>Delivery:</strong>{' '}
-                                                {order.delivery === 'standard'
-                                                    ? 'Standard (5-7 days)'
-                                                    : order.delivery === 'express'
-                                                        ? 'Express (2-3 days)'
-                                                        : 'Next Day'}
-                                            </p>
-                                            <p className="mb-2">
-                                                <strong>Status:</strong>{' '}
-                                                <span className="badge bg-brand-green">{order.status}</span>
-                                            </p>
-                                            <p className="mb-0">
-                                                <strong>Date:</strong> {formatDate(order.createdAt)}
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Order Items */}
-                        <div className="card border-0 shadow-sm mb-4">
-                            <div className="card-header bg-white">
-                                <h5 className="text-brand-blue mb-0">
-                                    Items Ordered ({order.items?.length})
-                                </h5>
-                            </div>
-                            <div className="card-body p-0">
-                                <div className="table-responsive">
-                                    <table className="table mb-0">
-                                        <thead className="table-light">
-                                            <tr>
-                                                <th>Product</th>
-                                                <th className="text-center">Qty</th>
-                                                <th className="text-end">Price</th>
-                                                <th className="text-end">Subtotal</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {order.items?.map((item) => (
-                                                <tr key={item.id}>
-                                                    <td>
-                                                        <div className="d-flex align-items-center">
-                                                            <img
-                                                                src={item.image}
-                                                                alt={item.name}
-                                                                className="rounded me-3"
-                                                                style={{
-                                                                    width: '50px',
-                                                                    height: '50px',
-                                                                    objectFit: 'cover',
-                                                                }}
-                                                            />
-                                                            <div>
-                                                                <p className="mb-0 fw-bold text-brand-blue">{item.name}</p>
-                                                                <small className="text-muted">{item.category}</small>
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td className="text-center align-middle">{item.quantity}</td>
-                                                    <td className="text-end align-middle">
-                                                        {formatPrice(item.price)}
-                                                    </td>
-                                                    <td className="text-end align-middle fw-bold text-brand-green">
-                                                        {formatPrice(item.price * item.quantity)}
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-
-                                {/* Price Summary */}
-                                <div className="border-top p-4">
-                                    <div className="row justify-content-end">
-                                        <div className="col-md-6">
-                                            <div className="d-flex justify-content-between mb-2">
-                                                <span className="text-muted">Subtotal:</span>
-                                                <span className="fw-bold">
-                                                    {formatPrice(order.pricing?.subtotal)}
-                                                </span>
-                                            </div>
-                                            <div className="d-flex justify-content-between mb-2">
-                                                <span className="text-muted">Shipping:</span>
-                                                <span className="fw-bold">
-                                                    {order.pricing?.shipping === 0 ? (
-                                                        <span className="text-success">FREE</span>
-                                                    ) : (
-                                                        formatPrice(order.pricing?.shipping)
-                                                    )}
-                                                </span>
-                                            </div>
-                                            <div className="d-flex justify-content-between mb-3">
-                                                <span className="text-muted">Tax:</span>
-                                                <span className="fw-bold">{formatPrice(order.pricing?.tax)}</span>
-                                            </div>
-                                            <hr />
-                                            <div className="d-flex justify-content-between">
-                                                <h5 className="mb-0 text-brand-blue">Total:</h5>
-                                                <h5 className="mb-0 text-brand-green fw-bold">
-                                                    {formatPrice(order.pricing?.total)}
-                                                </h5>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="row g-3">
-                            <div className="col-sm-4">
-                                <button
-                                    className="btn btn-outline-secondary w-100"
-                                    onClick={() => window.print()}
-                                >
-                                    <FaPrint className="me-2" /> Print Receipt
-                                </button>
-                            </div>
-                            <div className="col-sm-4">
-                                <Link to="/profile?tab=orders" className="btn btn-outline-primary w-100">
-                                    <FaShoppingBag className="me-2" /> Track Order
-                                </Link>
-                            </div>
-                            <div className="col-sm-4">
-                                <Link to="/" className="btn btn-success w-100">
-                                    <FaHome className="me-2" /> Back to Home
-                                </Link>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+      <div
+        className="d-flex justify-content-center align-items-center flex-column"
+        style={{ minHeight: "60vh" }}
+      >
+        <div
+          className="spinner-border text-brand-green mb-3"
+          role="status"
+          style={{ width: "3rem", height: "3rem" }}
+        >
+          <span className="visually-hidden">Loading order details...</span>
         </div>
+        <p className="text-muted">Loading order details...</p>
+      </div>
     );
+  }
+
+  if (!orderData) return null;
+
+  // Normalize order data to support both camelCase (mock state) and snake_case (backend API response)
+  const order = {
+    ...orderData,
+    id: orderData.order_number || orderData.id || orderData.order_id,
+    createdAt: orderData.created_at || orderData.createdAt,
+    status: orderData.status,
+    shipping:
+      orderData.shipping ||
+      (orderData.delivery_address
+        ? {
+            fullName: orderData.delivery_address.full_name,
+            addressLine1: orderData.delivery_address.address_line1,
+            addressLine2: orderData.delivery_address.address_line2,
+            city: orderData.delivery_address.city,
+            state: orderData.delivery_address.state,
+            zipCode: orderData.delivery_address.pincode,
+            country: orderData.delivery_address.country,
+            phone: orderData.delivery_address.mobile,
+            email: orderData.delivery_address.email || orderData.email || "",
+          }
+        : null),
+    payment: orderData.payment || {
+      last4: orderData.payment_method === "cod" ? "COD" : "Online",
+    },
+    delivery:
+      orderData.delivery ||
+      (orderData.delivery_charge > 0 ? "standard" : "free"),
+    pricing: orderData.pricing || {
+      subtotal: orderData.subtotal,
+      shipping: orderData.delivery_charge,
+      tax: orderData.gst_amount,
+      total: orderData.total_amount,
+    },
+    items:
+      orderData.items?.map((item) => {
+        const productMatch = products?.find(
+          (p) => String(p.id) === String(item.product_id),
+        );
+        const rawImagePath =
+          item.image ||
+          item.product_image ||
+          productMatch?.image ||
+          productMatch?.image_url;
+        return {
+          ...item,
+          name: item.name || item.product_name,
+          image: getImageUrl(rawImagePath),
+          price: item.price,
+          quantity: item.quantity,
+          category: item.category || productMatch?.category_name || "",
+        };
+      }) || [],
+  };
+
+  // Only the first step ("Order Placed") is complete for a freshly placed order.
+  // Swap this for real status-driven logic once the backend exposes a status timeline.
+  const activeStepIndex = 0;
+
+  const handleCopyOrderId = async () => {
+    try {
+      await navigator.clipboard.writeText(String(order.id));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch (err) {
+      console.error("Could not copy order id:", err);
+    }
+  };
+
+  return (
+    <div className="order-confirmation-page py-4 py-md-5">
+      <div className="container oc-container">
+        <div className="row justify-content-center">
+          <div className="col-lg-8">
+            {/* Success Header Card */}
+            <div className="oc-card mb-4 fade-in">
+              <div className="oc-hero">
+                <div className="oc-check-badge">
+                  <FaCheckCircle size={40} className="text-white" />
+                </div>
+
+                <h1>Order Confirmed!</h1>
+                <p className="oc-subtitle">
+                  Thank you for your purchase. Your order has been received.
+                </p>
+
+                <div className="oc-order-chip">
+                  <span className="oc-order-id">Order #{order.id}</span>
+                  <button
+                    type="button"
+                    className="oc-copy-btn"
+                    onClick={handleCopyOrderId}
+                    aria-label="Copy order number"
+                    title="Copy order number"
+                  >
+                    {copied ? <FaCheck size={13} /> : <FaRegCopy size={13} />}
+                  </button>
+                </div>
+
+                {order.shipping?.email && (
+                  <div className="oc-email-banner">
+                    <FaEnvelope />
+                    <span>
+                      A confirmation email has been sent to{" "}
+                      <strong>{order.shipping.email}</strong>
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Order Status Timeline */}
+            <div className="oc-card mb-4">
+              <div className="oc-card-header oc-card-header--blue">
+                Order Status
+              </div>
+              <div className="oc-timeline">
+                <div className="oc-timeline-track">
+                  {STATUS_STEPS.map((step, index) => {
+                    const Icon = step.icon;
+                    const isDone = index <= activeStepIndex;
+                    return (
+                      <div
+                        key={step.key}
+                        className={`oc-timeline-step${isDone ? " is-done" : ""}`}
+                      >
+                        <span className="oc-timeline-line" />
+                        <span className="oc-timeline-dot">
+                          <Icon size={16} />
+                        </span>
+                        <span className="oc-timeline-label">{step.label}</span>
+                        <span className="oc-timeline-sub">
+                          {index === activeStepIndex
+                            ? formatDate(order.createdAt)
+                            : isDone
+                              ? ""
+                              : "Pending"}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Order Details */}
+            <div className="oc-card mb-4">
+              <div className="oc-card-header oc-card-header--plain">
+                Order Details
+              </div>
+              <div className="oc-details-grid">
+                {/* Shipping Info */}
+                <div className="oc-detail-block">
+                  <h6>Shipping Address</h6>
+                  <div className="oc-detail-box">
+                    <p className="oc-name mb-1">{order.shipping?.fullName}</p>
+                    <p className="mb-1">{order.shipping?.addressLine1}</p>
+                    {order.shipping?.addressLine2 && (
+                      <p className="mb-1">{order.shipping.addressLine2}</p>
+                    )}
+                    <p className="mb-1">
+                      {order.shipping?.city}, {order.shipping?.state}{" "}
+                      {order.shipping?.zipCode}
+                    </p>
+                    <p className="mb-1">{order.shipping?.country}</p>
+                    <p className="mb-0 text-muted">
+                      📞 {order.shipping?.phone}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Payment & Delivery Info */}
+                <div className="oc-detail-block">
+                  <h6>Payment &amp; Delivery</h6>
+                  <div className="oc-detail-box">
+                    <div className="oc-detail-row">
+                      <span className="oc-label">Payment</span>
+                      <span className="oc-value">
+                        {orderData.payment_method === "cod" ||
+                        order.payment?.last4 === "COD"
+                          ? "Cash on Delivery"
+                          : `Card ••${order.payment?.last4 || "xxxx"}`}
+                      </span>
+                    </div>
+                    <div className="oc-detail-row">
+                      <span className="oc-label">Delivery</span>
+                      <span className="oc-value">
+                        {order.delivery === "standard"
+                          ? "Standard (5-7 days)"
+                          : order.delivery === "express"
+                            ? "Express (2-3 days)"
+                            : "Next Day"}
+                      </span>
+                    </div>
+                    <div className="oc-detail-row">
+                      <span className="oc-label">Status</span>
+                      <span className="oc-value">
+                        <span className="oc-status-pill">{order.status}</span>
+                      </span>
+                    </div>
+                    <div className="oc-detail-row">
+                      <span className="oc-label">Date</span>
+                      <span className="oc-value">
+                        {formatDate(order.createdAt)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Order Items */}
+            <div className="oc-card mb-4">
+              <div className="oc-card-header oc-card-header--plain">
+                Items Ordered ({order.items?.length})
+              </div>
+
+              {/* Desktop / tablet table */}
+              <div className="oc-items-table-wrap">
+                <table className="oc-items-table">
+                  <thead>
+                    <tr>
+                      <th>Product</th>
+                      <th className="text-center">Qty</th>
+                      <th className="text-end">Price</th>
+                      <th className="text-end">Subtotal</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {order.items?.map((item) => (
+                      <tr key={item.id}>
+                        <td>
+                          <div className="d-flex align-items-center">
+                            <img
+                              src={item.image}
+                              alt={item.name}
+                              className="oc-item-thumb me-3"
+                            />
+                            <div>
+                              <p className="oc-item-name mb-0">{item.name}</p>
+                              <small className="oc-item-cat">
+                                {item.category}
+                              </small>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="text-center">{item.quantity}</td>
+                        <td className="text-end">{formatPrice(item.price)}</td>
+                        <td
+                          className="text-end fw-bold"
+                          style={{ color: "var(--oc-green-dark)" }}
+                        >
+                          {formatPrice(item.price * item.quantity)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile stacked cards */}
+              <div className="oc-items-cards">
+                {order.items?.map((item) => (
+                  <div className="oc-item-card" key={item.id}>
+                    <img
+                      src={item.image}
+                      alt={item.name}
+                      className="oc-item-thumb"
+                    />
+                    <div className="oc-item-card-meta">
+                      <p className="oc-item-name mb-0">{item.name}</p>
+                      <small className="oc-item-cat">{item.category}</small>
+                      <div className="oc-item-card-footer">
+                        <span className="oc-qty">
+                          {formatPrice(item.price)} &times; {item.quantity}
+                        </span>
+                        <span className="oc-line-total">
+                          {formatPrice(item.price * item.quantity)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Price Summary */}
+              <div className="oc-summary">
+                <div className="oc-summary-inner">
+                  <div className="oc-summary-row">
+                    <span className="oc-label">Subtotal</span>
+                    <span>{formatPrice(order.pricing?.subtotal)}</span>
+                  </div>
+                  <div className="oc-summary-row">
+                    <span className="oc-label">Shipping</span>
+                    <span>
+                      {order.pricing?.shipping === 0 ? (
+                        <span style={{ color: "var(--oc-green)" }}>FREE</span>
+                      ) : (
+                        formatPrice(order.pricing?.shipping)
+                      )}
+                    </span>
+                  </div>
+                  <div className="oc-summary-row">
+                    <span className="oc-label">Tax</span>
+                    <span>{formatPrice(order.pricing?.tax)}</span>
+                  </div>
+                  <div className="oc-summary-total">
+                    <span className="oc-total-label">Total</span>
+                    <span className="oc-total-value">
+                      {formatPrice(order.pricing?.total)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="oc-actions">
+              <button
+                type="button"
+                className="oc-btn oc-btn--ghost"
+                onClick={() => window.print()}
+              >
+                <FaPrint /> Print Receipt
+              </button>
+
+              <Link to="/profile?tab=orders" className="oc-btn oc-btn--outline">
+                <FaShoppingBag /> Track Order
+              </Link>
+
+              <Link to="/" className="oc-btn oc-btn--solid">
+                <FaHome /> Back to Home
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default OrderConfirmation;

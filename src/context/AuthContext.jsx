@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import AuthService from "../services/authService";
 import ProfileService from "../services/profileService";
 
@@ -40,6 +40,13 @@ export const AuthProvider = ({ children }) => {
     if (savedUser && savedToken) {
       setUser(savedUser);
       setToken(savedToken);
+      // Fetch latest profile from server to get profile_image_url, address, etc.
+      ProfileService.getProfile().then((response) => {
+        if (response.success) {
+          setUser(response.data);
+          localStorage.setItem("user", JSON.stringify(response.data));
+        }
+      });
     }
     setLoading(false);
   }, []);
@@ -55,6 +62,13 @@ export const AuthProvider = ({ children }) => {
     if (response.success) {
       setUser(response.data.user);
       setToken(response.data.token);
+      // Fetch latest profile from server to get profile_image_url, address, etc.
+      ProfileService.getProfile().then((res) => {
+        if (res.success) {
+          setUser(res.data);
+          localStorage.setItem("user", JSON.stringify(res.data));
+        }
+      });
     }
     return response;
   };
@@ -69,6 +83,13 @@ export const AuthProvider = ({ children }) => {
     if (response.success) {
       setUser(response.data.user);
       setToken(response.data.token);
+      // Fetch latest profile from server to get profile_image_url, address, etc.
+      ProfileService.getProfile().then((res) => {
+        if (res.success) {
+          setUser(res.data);
+          localStorage.setItem("user", JSON.stringify(res.data));
+        }
+      });
     }
     return response;
   };
@@ -101,20 +122,20 @@ export const AuthProvider = ({ children }) => {
    * Useful to refresh fields not returned by login/register, like address
    * or profile_image_url.
    */
-  const fetchProfile = async () => {
+  const fetchProfile = useCallback(async () => {
     const response = await ProfileService.getProfile();
     if (response.success) {
       setUser(response.data);
       localStorage.setItem("user", JSON.stringify(response.data));
     }
     return response;
-  };
+  }, []);
 
   /**
    * updates: { name, email, mobile, address, profileImageFile }
    * Matches API.updateProfile's real signature - single object, no userId.
    */
-  const updateProfile = async (updates) => {
+  const updateProfile = useCallback(async (updates) => {
     try {
       const response = await ProfileService.updateProfile(updates);
       // apiService already writes the updated user to localStorage on success
@@ -126,7 +147,7 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       return { success: false, error: "Profile update failed." };
     }
-  };
+  }, []);
 
   const value = {
     user,

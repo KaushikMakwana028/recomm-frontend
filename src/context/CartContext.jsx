@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import CartService from "../services/cartService";
+import ProductService from "../services/productService";
 import { useAuth } from "./AuthContext";
+import { useToast } from "./ToastContext";
 
 const CartContext = createContext();
 const GUEST_CART_KEY = "guest_cart";
@@ -35,15 +37,50 @@ const mapApiItem = (row) => ({
 
 export const CartProvider = ({ children }) => {
   const { isAuthenticated } = useAuth();
+  const { showToast } = useToast();
   const [cartItems, setCartItems] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  const healGuestCart = async (items) => {
+    if (!items || items.length === 0) return items;
+    const needsHealing = items.some((item) => !item.image || !item.category);
+    if (!needsHealing) return items;
+
+    try {
+      const result = await ProductService.getProductList();
+      if (result.success && result.data) {
+        const products = result.data;
+        const healed = items.map((item) => {
+          if (!item.image || !item.category) {
+            const match = products.find((p) => String(p.id) === String(item.id));
+            if (match) {
+              return {
+                ...item,
+                image: item.image || match.image_url || match.image,
+                category: item.category || match.category_name,
+              };
+            }
+          }
+          return item;
+        });
+        writeGuestCart(healed);
+        return healed;
+      }
+    } catch (e) {
+      console.error("Failed to heal guest cart:", e);
+    }
+    return items;
+  };
 
   // Load cart whenever auth state changes
   useEffect(() => {
     if (isAuthenticated) {
       syncGuestCartThenLoad();
     } else {
-      setCartItems(readGuestCart());
+      const guestItems = readGuestCart();
+      healGuestCart(guestItems).then((healedItems) => {
+        setCartItems(healedItems);
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
@@ -70,10 +107,13 @@ export const CartProvider = ({ children }) => {
     await loadServerCart();
   };
 
-  const addToCart = async (product, quantity = 1) => {
+  const addToCart = async (product, quantity = 1, silent = false) => {
     if (isAuthenticated) {
       const result = await CartService.addToCartApi(product.id, quantity);
-      if (result.success) await loadServerCart();
+      if (result.success) {
+        await loadServerCart();
+        if (!silent) showToast(`Added "${product.name}" to cart!`, "success");
+      }
       return result;
     }
 
@@ -91,7 +131,7 @@ export const CartProvider = ({ children }) => {
           id: product.id,
           name: product.name,
           price: product.price,
-          image: product.image_url,
+          image: product.image_url || product.image,
           category: product.category_name,
           quantity,
         },
@@ -99,6 +139,7 @@ export const CartProvider = ({ children }) => {
     }
     writeGuestCart(updated);
     setCartItems(updated);
+    if (!silent) showToast(`Added "${product.name}" to cart!`, "success");
     return { success: true };
   };
 
@@ -120,15 +161,22 @@ export const CartProvider = ({ children }) => {
   };
 
   const removeFromCart = async (productId) => {
+    const item = cartItems.find(i => i.id === productId);
+    const productName = item ? item.name : "Product";
+
     if (isAuthenticated) {
       const result = await CartService.removeFromCartApi(productId);
-      if (result.success) await loadServerCart();
+      if (result.success) {
+        await loadServerCart();
+        showToast(`Removed "${productName}" from cart.`, "info");
+      }
       return result;
     }
 
     const updated = readGuestCart().filter((i) => i.id !== productId);
     writeGuestCart(updated);
     setCartItems(updated);
+    showToast(`Removed "${productName}" from cart.`, "info");
     return { success: true };
   };
 
@@ -159,6 +207,7 @@ export const CartProvider = ({ children }) => {
     updateQuantity,
     removeFromCart,
     clearCart,
+    refreshCart: loadServerCart,
   };
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
