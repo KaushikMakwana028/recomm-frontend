@@ -291,7 +291,7 @@ export const getImageUrl = (path) => {
   
   // Prepend backend base URL (excluding the api part)
   const cleanPath = trimmed.startsWith("/") ? trimmed.slice(1) : trimmed;
-  return `https://admin.recomm.in/${cleanPath}`;
+  return `http://localhost/kaushik_php/ci_project/recomm/${cleanPath}`;
 };
 
 export default {

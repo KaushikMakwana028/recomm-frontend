@@ -130,8 +130,12 @@ const OrderConfirmation = () => {
       last4: orderData.payment_method === "cod" ? "COD" : "Online",
     },
     delivery:
-      orderData.delivery ||
-      (orderData.delivery_charge > 0 ? "standard" : "free"),
+      orderData.delivery_type === "urgent"
+        ? "urgent"
+        : orderData.delivery_type === "normal"
+          ? "normal"
+          : orderData.delivery ||
+            (orderData.delivery_charge > 0 ? "standard" : "free"),
     pricing: orderData.pricing || {
       subtotal: orderData.subtotal,
       shipping: orderData.delivery_charge,
@@ -310,11 +314,15 @@ const OrderConfirmation = () => {
                     <div className="oc-detail-row">
                       <span className="oc-label">Delivery</span>
                       <span className="oc-value">
-                        {order.delivery === "standard"
-                          ? "Standard (5-7 days)"
-                          : order.delivery === "express"
-                            ? "Express (2-3 days)"
-                            : "Next Day"}
+                        {order.delivery === "urgent"
+                          ? "Urgent (Within 24 Hours)"
+                          : order.delivery === "normal"
+                            ? "Normal (3-5 Business Days)"
+                            : order.delivery === "standard"
+                              ? "Standard (5-7 days)"
+                              : order.delivery === "express"
+                                ? "Express (2-3 days)"
+                                : "Next Day"}
                       </span>
                     </div>
                      <div className="oc-detail-row">

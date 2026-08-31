@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const axiosInstance = axios.create({
-    baseURL: 'https://admin.recomm.in/user/api/',
+    baseURL: 'http://localhost/kaushik_php/ci_project/recomm/api/user/',
     headers: {
         'Content-Type': 'application/json'
     },

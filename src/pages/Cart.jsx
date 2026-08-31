@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   FaTrash,
@@ -11,12 +11,12 @@ import {
 } from "react-icons/fa";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
+import ProfileService from "../services/profileService";
+import ProductService from "../services/productService";
 import { formatPrice, getImageUrl } from "../utils/helpers";
 
 const NAVY = "#00204E";
 const GREEN = "#34A129";
-const FREE_SHIPPING_THRESHOLD = 50;
-
 const Cart = () => {
   const { cartItems, cartTotal, removeFromCart, updateQuantity, clearCart } =
     useCart();
@@ -31,13 +31,109 @@ const Cart = () => {
     }
   };
 
-  const shippingCost = cartTotal > FREE_SHIPPING_THRESHOLD ? 0 : 5.99;
-  const tax = cartTotal * 0.08; // 8% tax
+  const [selectedAddress, setSelectedAddress] = useState(null);
+  const [distance, setDistance] = useState(null);
+  const [distanceLoading, setDistanceLoading] = useState(false);
+  const [vendorPincode, setVendorPincode] = useState("");
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      const loadDefaultAddress = async () => {
+        try {
+          const result = await ProfileService.getAddresses();
+          if (result.success) {
+            const list = result.data?.addresses || [];
+            const defaultAddr = list.find((a) => a.is_default) || list[0];
+            if (defaultAddr) {
+              setSelectedAddress(defaultAddr);
+            }
+          }
+        } catch (e) {
+          console.error("Failed to load addresses in cart", e);
+        }
+      };
+      loadDefaultAddress();
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (cartItems.length > 0) {
+      const fetchVendorPincode = async () => {
+        try {
+          const firstItem = cartItems[0];
+          const result = await ProductService.getProductDetail(firstItem.id);
+          if (result.success && result.data) {
+            const address = result.data.store_address || "";
+            const match = address.match(/\b\d{6}\b/);
+            if (match) {
+              setVendorPincode(match[0]);
+            } else {
+              setVendorPincode("382330"); // Fallback
+            }
+          }
+        } catch (e) {
+          console.error("Failed to fetch vendor pincode in cart", e);
+          setVendorPincode("382330"); // Fallback
+        }
+      };
+      fetchVendorPincode();
+    }
+  }, [cartItems]);
+
+  const calculateDistance = async (vendorPin, customerPin) => {
+    if (!vendorPin || !customerPin) return;
+    setDistanceLoading(true);
+    try {
+      const vendorUrl = `https://nominatim.openstreetmap.org/search?postalcode=${vendorPin}&country=India&format=json`;
+      const vendorRes = await fetch(vendorUrl, { headers: { "Accept": "application/json" } });
+      if (!vendorRes.ok) throw new Error("Failed to reach geocoding service");
+      const vendorData = await vendorRes.json();
+      if (!vendorData || vendorData.length === 0) throw new Error("Vendor coords not found");
+      const vendorCoords = {
+        lat: parseFloat(vendorData[0].lat),
+        lon: parseFloat(vendorData[0].lon)
+      };
+
+      const customerUrl = `https://nominatim.openstreetmap.org/search?postalcode=${customerPin}&country=India&format=json`;
+      const customerRes = await fetch(customerUrl, { headers: { "Accept": "application/json" } });
+      if (!customerRes.ok) throw new Error("Failed to reach geocoding service");
+      const customerData = await customerRes.json();
+      if (!customerData || customerData.length === 0) throw new Error("Customer coords not found");
+      const customerCoords = {
+        lat: parseFloat(customerData[0].lat),
+        lon: parseFloat(customerData[0].lon)
+      };
+
+      const R = 6371;
+      const dLat = (customerCoords.lat - vendorCoords.lat) * Math.PI / 180;
+      const dLon = (customerCoords.lon - vendorCoords.lon) * Math.PI / 180;
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(vendorCoords.lat * Math.PI / 180) * Math.cos(customerCoords.lat * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      const rawDistance = R * c;
+
+      const approximatedDistance = Math.round(rawDistance * 1.3 * 10) / 10;
+      setDistance(approximatedDistance);
+    } catch (err) {
+      console.error("Distance calculation failed in cart:", err);
+      setDistance(5); // Fallback
+    } finally {
+      setDistanceLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedAddress && vendorPincode) {
+      calculateDistance(vendorPincode, selectedAddress.pincode);
+    }
+  }, [selectedAddress, vendorPincode]);
+
+  const baseCharge = distance !== null ? Math.round(distance * 10) : 50;
+  const shippingCost = baseCharge;
+  const tax = 0; // Align with checkout and backend (no tax)
   const finalTotal = cartTotal + shippingCost + tax;
-  const shippingProgress = Math.min(
-    100,
-    (cartTotal / FREE_SHIPPING_THRESHOLD) * 100,
-  );
 
   if (cartItems.length === 0) {
     return (
@@ -349,36 +445,28 @@ const Cart = () => {
                   <span className="label">Subtotal</span>
                   <span className="value">{formatPrice(cartTotal)}</span>
                 </div>
+
+
+
                 <div className="ct-row">
                   <span className="label">Shipping</span>
                   <span className="value">
-                    {shippingCost === 0 ? (
-                      <span style={{ color: GREEN }}>FREE</span>
+                    {distanceLoading ? (
+                      <span className="text-muted small">Calculating...</span>
                     ) : (
                       formatPrice(shippingCost)
                     )}
                   </span>
                 </div>
-                <div className="ct-row">
-                  <span className="label">Tax (8%)</span>
-                  <span className="value">{formatPrice(tax)}</span>
-                </div>
 
-                {shippingCost > 0 && (
-                  <div className="mb-2">
-                    <div className="ct-ship-progress">
-                      <div
-                        className="ct-ship-progress-bar"
-                        style={{ width: `${shippingProgress}%` }}
-                      />
-                    </div>
-                    <div className="small mt-2" style={{ color: "#6c7a90" }}>
-                      Add{" "}
-                      <strong style={{ color: GREEN }}>
-                        {formatPrice(FREE_SHIPPING_THRESHOLD - cartTotal)}
-                      </strong>{" "}
-                      more for FREE shipping
-                    </div>
+                {isAuthenticated && selectedAddress && (
+                  <div className="small text-muted mb-2" style={{ fontSize: "0.75rem", marginTop: "-4px" }}>
+                    Calculated for pincode: <strong>{selectedAddress.pincode}</strong>
+                  </div>
+                )}
+                {!isAuthenticated && (
+                  <div className="small text-muted mb-2" style={{ fontSize: "0.75rem", marginTop: "-4px" }}>
+                    Estimated charge (log in to calculate exactly)
                   </div>
                 )}
 

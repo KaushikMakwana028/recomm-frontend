@@ -12,14 +12,12 @@ import { useAuth } from "../context/AuthContext";
 import { useOrder } from "../context/OrderContext";
 import { useToast } from "../context/ToastContext";
 import ProfileService from "../services/profileService";
+import ProductService from "../services/productService";
 import { formatPrice } from "../utils/helpers";
 import "../styles/Checkout.css";
 
-const FREE_DELIVERY_THRESHOLD = 500;
-const FLAT_DELIVERY_CHARGE = 49;
-
 const Checkout = () => {
-  const { cartItems, cartTotal, refreshCart } = useCart();
+  const { cartItems, cartTotal, refreshCart, deliveryType, setDeliveryType } = useCart();
   const { isAuthenticated } = useAuth();
   const { placeOrder } = useOrder();
   const { showBigAlert } = useToast();
@@ -59,9 +57,159 @@ const Checkout = () => {
     setAddressLoading(false);
   };
 
-  const deliveryCharge =
-    cartTotal >= FREE_DELIVERY_THRESHOLD ? 0 : FLAT_DELIVERY_CHARGE;
+  const [vendorPincode, setVendorPincode] = useState("");
+  const [distance, setDistance] = useState(null);
+  const [distanceLoading, setDistanceLoading] = useState(false);
+
+  useEffect(() => {
+    if (cartItems.length > 0) {
+      const fetchVendorPincode = async () => {
+        try {
+          const firstItem = cartItems[0];
+          const result = await ProductService.getProductDetail(firstItem.id);
+          if (result.success && result.data) {
+            const address = result.data.store_address || "";
+            const match = address.match(/\b\d{6}\b/);
+            if (match) {
+              setVendorPincode(match[0]);
+            } else {
+              setVendorPincode("382330"); // Fallback to database vendor pincode
+            }
+          }
+        } catch (e) {
+          console.error("Failed to fetch vendor pincode", e);
+          setVendorPincode("382330"); // Fallback
+        }
+      };
+      fetchVendorPincode();
+    }
+  }, [cartItems]);
+
+  const calculateDistance = async (vendorPin, customerPin) => {
+    if (!vendorPin || !customerPin) return;
+    setDistanceLoading(true);
+    try {
+      // 1. Fetch vendor coordinates
+      const vendorUrl = `https://nominatim.openstreetmap.org/search?postalcode=${vendorPin}&country=India&format=json`;
+      const vendorRes = await fetch(vendorUrl, {
+        headers: { "Accept": "application/json" }
+      });
+      if (!vendorRes.ok) throw new Error("Failed to reach geocoding service");
+      const vendorData = await vendorRes.json();
+      if (!vendorData || vendorData.length === 0) throw new Error("Vendor coords not found");
+      const vendorCoords = {
+        lat: parseFloat(vendorData[0].lat),
+        lon: parseFloat(vendorData[0].lon)
+      };
+
+      // 2. Fetch customer coordinates
+      const customerUrl = `https://nominatim.openstreetmap.org/search?postalcode=${customerPin}&country=India&format=json`;
+      const customerRes = await fetch(customerUrl, {
+        headers: { "Accept": "application/json" }
+      });
+      if (!customerRes.ok) throw new Error("Failed to reach geocoding service");
+      const customerData = await customerRes.json();
+      if (!customerData || customerData.length === 0) throw new Error("Customer coords not found");
+      const customerCoords = {
+        lat: parseFloat(customerData[0].lat),
+        lon: parseFloat(customerData[0].lon)
+      };
+
+      // 3. Haversine distance
+      const R = 6371; // Earth's radius in KM
+      const dLat = (customerCoords.lat - vendorCoords.lat) * Math.PI / 180;
+      const dLon = (customerCoords.lon - vendorCoords.lon) * Math.PI / 180;
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(vendorCoords.lat * Math.PI / 180) * Math.cos(customerCoords.lat * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      const rawDistance = R * c;
+
+      // Approximate road distance (scale straight-line by 1.3)
+      const approximatedDistance = Math.round(rawDistance * 1.3 * 10) / 10;
+      setDistance(approximatedDistance);
+    } catch (err) {
+      console.error("Distance calculation failed:", err);
+      // Fallback distance e.g. 5 KM if APIs fail
+      setDistance(5);
+    } finally {
+      setDistanceLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedAddressId && addresses.length > 0 && vendorPincode) {
+      const addr = addresses.find((a) => a.id === selectedAddressId);
+      if (addr && addr.pincode) {
+        calculateDistance(vendorPincode, addr.pincode);
+      }
+    }
+  }, [selectedAddressId, addresses, vendorPincode]);
+
+  const baseCharge = distance !== null ? Math.round(distance * 10) : 0;
+  const normalCharge = baseCharge;
+  const urgentCharge = baseCharge + 50;
+  const deliveryCharge = deliveryType === "urgent" ? urgentCharge : normalCharge;
   const finalTotal = cartTotal + deliveryCharge;
+
+  const renderDeliveryOptionCard = () => (
+    <div className="ck-card mb-3 mt-3">
+      <div className="ck-card-header ck-card-header--plain" style={{ borderLeft: "4px solid var(--ck-green, #28a745)" }}>
+        <span className="font-weight-bold" style={{ color: "var(--ck-green, #28a745)" }}>Delivery Option</span>
+      </div>
+      <div className="ck-card-body">
+        <div className="d-flex flex-column gap-3">
+          <label 
+            className={`d-flex align-items-center p-3 border rounded ${deliveryType === "normal" ? "border-success bg-light" : ""}`} 
+            style={{ cursor: "pointer", transition: "all 0.2s" }}
+          >
+            <input
+              type="radio"
+              name="deliveryType"
+              value="normal"
+              checked={deliveryType === "normal"}
+              onChange={() => setDeliveryType("normal")}
+              className="me-3"
+              style={{ accentColor: "var(--ck-green)", width: "18px", height: "18px" }}
+            />
+            <div className="flex-grow-1">
+              <strong className="d-block text-dark">Normal Delivery</strong>
+              <span className="text-muted small">Delivered in 3-5 business days</span>
+            </div>
+            <span className="fw-bold text-dark">
+              {formatPrice(normalCharge)}
+            </span>
+          </label>
+
+          <label 
+            className={`d-flex align-items-center p-3 border rounded ${deliveryType === "urgent" ? "border-success bg-light" : ""}`} 
+            style={{ cursor: "pointer", transition: "all 0.2s" }}
+          >
+            <input
+              type="radio"
+              name="deliveryType"
+              value="urgent"
+              checked={deliveryType === "urgent"}
+              onChange={() => setDeliveryType("urgent")}
+              className="me-3"
+              style={{ accentColor: "var(--ck-green)", width: "18px", height: "18px" }}
+            />
+            <div className="flex-grow-1">
+              <strong className="d-block text-dark">
+                Urgent Delivery
+                <span style={{ color: "#dc3545", fontSize: "0.8rem", marginLeft: "8px", fontWeight: "600" }}>(+ ₹50.00 Extra)</span>
+              </strong>
+              <span className="text-muted small">Delivered within 24 hours</span>
+            </div>
+            <span className="fw-bold text-dark">
+              {formatPrice(urgentCharge)}
+            </span>
+          </label>
+        </div>
+      </div>
+    </div>
+  );
 
   const handleContinueToReview = () => {
     if (!selectedAddressId) {
@@ -81,6 +229,8 @@ const Checkout = () => {
       addressId: selectedAddressId,
       notes,
       deliveryCharge,
+      deliveryType,
+      distance,
     });
 
     if (result.success) {
@@ -155,108 +305,108 @@ const Checkout = () => {
             {/* Step 1: Select Address */}
             {currentStep === 1 && (
               <div className="ck-card">
-                <div className="ck-card-header ck-card-header--blue">
-                  <span>
-                    <FaMapMarkerAlt className="me-2" />
-                    Select Delivery Address
-                  </span>
-                  <Link
-                    to="/profile?tab=addresses"
-                    className="ck-btn ck-btn--outline-light"
-                  >
-                    <FaPlus size={11} /> Add New
-                  </Link>
-                </div>
-                <div className="ck-card-body">
-                  {addressLoading ? (
-                    <div className="text-center py-4">
-                      <div
-                        className="spinner-border text-brand-green"
-                        role="status"
+                  <div className="ck-card-header ck-card-header--blue">
+                    <span>
+                      <FaMapMarkerAlt className="me-2" />
+                      Select Delivery Address
+                    </span>
+                    <Link
+                      to="/profile?tab=addresses"
+                      className="ck-btn ck-btn--outline-light"
+                    >
+                      <FaPlus size={11} /> Add New
+                    </Link>
+                  </div>
+                  <div className="ck-card-body">
+                    {addressLoading ? (
+                      <div className="text-center py-4">
+                        <div
+                          className="spinner-border text-brand-green"
+                          role="status"
+                        />
+                      </div>
+                    ) : addresses.length === 0 ? (
+                      <div className="ck-empty-state">
+                        <p className="mb-3">No saved addresses yet.</p>
+                        <Link
+                          to="/profile?tab=addresses"
+                          className="ck-btn ck-btn--solid"
+                        >
+                          Add Delivery Address
+                        </Link>
+                      </div>
+                    ) : (
+                      <div className="ck-address-grid">
+                        {addresses.map((addr) => {
+                          const isSelected = selectedAddressId === addr.id;
+                          const isDefault =
+                            addr.is_default === 1 || addr.is_default === true;
+                          return (
+                            <label
+                              key={addr.id}
+                              className={`ck-address-card${isSelected ? " is-selected" : ""}`}
+                            >
+                              <input
+                                type="radio"
+                                name="deliveryAddress"
+                                checked={isSelected}
+                                onChange={() => setSelectedAddressId(addr.id)}
+                              />
+                              <div>
+                                <span className="ck-address-name">
+                                  {addr.full_name}
+                                  {isDefault && (
+                                    <span className="ck-badge-default">
+                                      Default
+                                    </span>
+                                  )}
+                                </span>
+                                <p className="ck-address-phone">{addr.mobile}</p>
+                                <p className="ck-address-text">
+                                  {addr.address_line1}
+                                  {addr.address_line2
+                                    ? `, ${addr.address_line2}`
+                                    : ""}
+                                  {addr.landmark
+                                    ? ` (near ${addr.landmark})`
+                                    : ""}
+                                  <br />
+                                  {addr.city}, {addr.state} - {addr.pincode}
+                                </p>
+                              </div>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    <div className="mt-4">
+                      <label className="ck-notes-label">
+                        Order Notes (optional)
+                      </label>
+                      <textarea
+                        className="ck-textarea"
+                        rows="2"
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        placeholder="Any delivery instructions..."
                       />
                     </div>
-                  ) : addresses.length === 0 ? (
-                    <div className="ck-empty-state">
-                      <p className="mb-3">No saved addresses yet.</p>
-                      <Link
-                        to="/profile?tab=addresses"
-                        className="ck-btn ck-btn--solid"
-                      >
-                        Add Delivery Address
+
+                    <div className="ck-step-actions">
+                      <Link to="/cart" className="ck-btn ck-btn--ghost">
+                        Back to Cart
                       </Link>
+                      <button
+                        className="ck-btn ck-btn--solid"
+                        onClick={handleContinueToReview}
+                        disabled={addresses.length === 0}
+                      >
+                        Continue to Review
+                      </button>
                     </div>
-                  ) : (
-                    <div className="ck-address-grid">
-                      {addresses.map((addr) => {
-                        const isSelected = selectedAddressId === addr.id;
-                        const isDefault =
-                          addr.is_default === 1 || addr.is_default === true;
-                        return (
-                          <label
-                            key={addr.id}
-                            className={`ck-address-card${isSelected ? " is-selected" : ""}`}
-                          >
-                            <input
-                              type="radio"
-                              name="deliveryAddress"
-                              checked={isSelected}
-                              onChange={() => setSelectedAddressId(addr.id)}
-                            />
-                            <div>
-                              <span className="ck-address-name">
-                                {addr.full_name}
-                                {isDefault && (
-                                  <span className="ck-badge-default">
-                                    Default
-                                  </span>
-                                )}
-                              </span>
-                              <p className="ck-address-phone">{addr.mobile}</p>
-                              <p className="ck-address-text">
-                                {addr.address_line1}
-                                {addr.address_line2
-                                  ? `, ${addr.address_line2}`
-                                  : ""}
-                                {addr.landmark
-                                  ? ` (near ${addr.landmark})`
-                                  : ""}
-                                <br />
-                                {addr.city}, {addr.state} - {addr.pincode}
-                              </p>
-                            </div>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  <div className="mt-4">
-                    <label className="ck-notes-label">
-                      Order Notes (optional)
-                    </label>
-                    <textarea
-                      className="ck-textarea"
-                      rows="2"
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      placeholder="Any delivery instructions..."
-                    />
-                  </div>
-
-                  <div className="ck-step-actions">
-                    <Link to="/cart" className="ck-btn ck-btn--ghost">
-                      Back to Cart
-                    </Link>
-                    <button
-                      className="ck-btn ck-btn--solid"
-                      onClick={handleContinueToReview}
-                      disabled={addresses.length === 0}
-                    >
-                      Continue to Review
-                    </button>
                   </div>
                 </div>
-              </div>
             )}
 
             {/* Step 2: Review Order */}
@@ -293,6 +443,8 @@ const Checkout = () => {
                     )}
                   </div>
                 </div>
+
+                {renderDeliveryOptionCard()}
 
                 <div className="ck-card mb-3">
                   <div className="ck-card-header ck-card-header--plain">
@@ -374,11 +526,19 @@ const Checkout = () => {
                   <span className="ck-label">Subtotal</span>
                   <span>{formatPrice(cartTotal)}</span>
                 </div>
+                 <div className="ck-summary-row align-items-center" style={{ background: "#e8f4fd", padding: "6px 10px", borderRadius: "6px", margin: "6px 0" }}>
+                  <span className="ck-label font-weight-bold" style={{ color: "#00204E", margin: 0 }}>Delivery Mode</span>
+                  <span className="text-capitalize font-weight-bold badge text-white" style={{ backgroundColor: deliveryType === "urgent" ? "#dc3545" : "#00204E", padding: "4px 8px", borderRadius: "4px" }}>
+                    {deliveryType}
+                  </span>
+                </div>
                 <div className="ck-summary-row">
-                  <span className="ck-label">Delivery</span>
+                  <span className="ck-label">Delivery Charge</span>
                   <span>
-                    {deliveryCharge === 0 ? (
-                      <span style={{ color: "var(--ck-green)" }}>FREE</span>
+                    {distanceLoading ? (
+                      <span className="text-muted small">Calculating...</span>
+                    ) : distance === null ? (
+                      <span className="text-muted small">Select address</span>
                     ) : (
                       formatPrice(deliveryCharge)
                     )}

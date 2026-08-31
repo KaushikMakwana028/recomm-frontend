@@ -4,13 +4,15 @@ const OrderService = {
   /**
    * Place a COD order using a saved address
    */
-  placeOrder: async ({ addressId, notes, deliveryCharge = 0 }) => {
+  placeOrder: async ({ addressId, notes, deliveryCharge = 0, deliveryType = "normal", distance = null }) => {
     return call(
       axiosInstance.post("/place_order", {
         address_id: addressId,
         payment_method: "cod",
         notes: notes || "",
         delivery_charge: deliveryCharge,
+        delivery_type: deliveryType,
+        distance: distance,
       }),
     );
   },

@@ -19,8 +19,8 @@ export const OrderProvider = ({ children }) => {
     totalOrders: 0,
   });
 
-  const placeOrder = useCallback(async ({ addressId, notes, deliveryCharge }) => {
-    return await OrderService.placeOrder({ addressId, notes, deliveryCharge });
+  const placeOrder = useCallback(async ({ addressId, notes, deliveryCharge, deliveryType, distance }) => {
+    return await OrderService.placeOrder({ addressId, notes, deliveryCharge, deliveryType, distance });
   }, []);
 
   const fetchOrders = useCallback(async ({ page = 1, status } = {}) => {

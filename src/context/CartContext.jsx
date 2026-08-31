@@ -198,6 +198,8 @@ export const CartProvider = ({ children }) => {
   );
   const cartItemCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
+  const [deliveryType, setDeliveryType] = useState("normal");
+
   const value = {
     cartItems,
     cartTotal,
@@ -208,6 +210,8 @@ export const CartProvider = ({ children }) => {
     removeFromCart,
     clearCart,
     refreshCart: loadServerCart,
+    deliveryType,
+    setDeliveryType,
   };
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
