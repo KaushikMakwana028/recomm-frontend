@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
+import logoDark from "../assets/recomm-logo-sidebar.png";
 import {
   FaFacebookF,
   FaTwitter,
@@ -60,11 +61,12 @@ const FooterLinkList = ({ title, links, open, onToggle }) => (
   <div className="ft-col">
     {/* Mobile: tap-to-expand header */}
     <button
-      className="ft-accordion-toggle d-flex d-lg-none justify-content-between align-items-center w-100 btn btn-link text-decoration-none p-0"
+      type="button"
+      className="ft-accordion-toggle"
       onClick={onToggle}
       aria-expanded={open}
     >
-      <span className="ft-heading mb-0">{title}</span>
+      <span className="ft-heading">{title}</span>
       <FaChevronDown
         size={12}
         className={`ft-chevron ${open ? "is-open" : ""}`}
@@ -72,9 +74,9 @@ const FooterLinkList = ({ title, links, open, onToggle }) => (
     </button>
 
     {/* Desktop: static heading */}
-    <h6 className="ft-heading d-none d-lg-block mb-3">{title}</h6>
+    <h6 className="ft-heading ft-heading-desktop">{title}</h6>
 
-    <ul className={`list-unstyled ft-link-list ${open ? "is-open" : ""}`}>
+    <ul className={`ft-link-list ${open ? "is-open" : ""}`}>
       {links.map((link) => (
         <li key={link.label}>
           <Link to={link.path} className="ft-link">
@@ -92,85 +94,166 @@ const Footer = () => {
   const [supportOpen, setSupportOpen] = useState(false);
 
   return (
-    <footer className="ft text-white mt-5">
+    <footer className="ft">
       <style>{`
-                .ft { background-color: ${NAVY}; }
+        * { box-sizing: border-box; }
+        .ft { background-color: ${NAVY}; color: #fff; font-family: 'Poppins', sans-serif; margin-top: 3rem; }
+        .ft-inner { max-width: 1180px; margin: 0 auto; padding: 0 1.25rem; }
 
-                /* Features bar */
-                .ft-features { border-bottom: 1px solid rgba(255,255,255,0.1); padding: 1.5rem 0; }
-                .ft-feature-icon { color: ${GREEN}; }
-                .ft-feature-title { font-size: 0.82rem; font-weight: 700; margin-bottom: 0.1rem; }
-                .ft-feature-sub { font-size: 0.72rem; color: rgba(255,255,255,0.55); }
+        /* ---------- Features bar ---------- */
+        .ft-features { border-bottom: 1px solid rgba(255,255,255,0.1); padding: 1.5rem 0; }
+        .ft-features-grid {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 1rem;
+          text-align: center;
+        }
+        .ft-feature-icon { color: ${GREEN}; margin-bottom: 0.5rem; }
+        .ft-feature-title { font-size: 0.82rem; font-weight: 700; margin: 0 0 0.15rem; }
+        .ft-feature-sub { font-size: 0.72rem; color: rgba(255,255,255,0.55); display: block; }
 
-                /* Main content */
-                .ft-main { padding: 2.5rem 0; }
-                .ft-brand-name { font-weight: 800; }
-                .ft-tagline { color: rgba(255,255,255,0.55); line-height: 1.7; font-size: 0.9rem; }
+        /* ---------- Main content ---------- */
+        .ft-main { padding: 2.5rem 0; }
+        .ft-grid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 0;
+        }
+        @media (min-width: 992px) {
+          .ft-grid { grid-template-columns: 2fr 1fr 1fr 2fr; gap: 2rem; }
+        }
 
-                .ft-social {
-                    width: 36px; height: 36px; border-radius: 50%;
-                    background: rgba(255,255,255,0.1); display: flex; align-items: center;
-                    justify-content: center; color: #fff; transition: background-color .2s ease;
-                }
-                .ft-social:hover { background: ${GREEN}; color: #fff; }
+        .ft-brand-block { padding-bottom: 1.5rem; }
+        .ft-brand-name { font-weight: 800; font-size: 1.35rem; margin: 0 0 0.85rem; }
+        .ft-brand-name a { text-decoration: none; }
+        .ft-tagline { color: rgba(255,255,255,0.55); line-height: 1.7; font-size: 0.9rem; margin: 0 0 1.1rem; }
 
-                .ft-heading {
-                    color: ${GREEN}; text-transform: uppercase; letter-spacing: 0.06em;
-                    font-size: 0.78rem; font-weight: 700;
-                }
-                .ft-chevron { color: ${GREEN}; transition: transform .2s ease; }
-                .ft-chevron.is-open { transform: rotate(180deg); }
+        .ft-social-row { display: flex; gap: 0.6rem; }
+        .ft-social {
+          width: 38px; height: 38px; border-radius: 50%;
+          background: rgba(255,255,255,0.1); display: flex; align-items: center;
+          justify-content: center; color: #fff; transition: background-color .2s ease;
+          flex-shrink: 0;
+        }
+        .ft-social:hover { background: ${GREEN}; }
 
-                .ft-link-list li { margin-bottom: 0.55rem; }
-                .ft-link {
-                    color: rgba(255,255,255,0.55); text-decoration: none; font-size: 0.88rem;
-                    transition: color .2s ease;
-                }
-                .ft-link:hover { color: ${GREEN}; }
+        .ft-heading {
+          color: ${GREEN}; text-transform: uppercase; letter-spacing: 0.06em;
+          font-size: 0.76rem; font-weight: 700; margin: 0;
+        }
+        .ft-heading-desktop { display: none; margin-bottom: 1rem; }
 
-                .ft-contact-item { display: flex; align-items: flex-start; gap: 0.65rem; margin-bottom: 0.65rem; font-size: 0.86rem; }
-                .ft-contact-item svg { color: ${GREEN}; flex-shrink: 0; margin-top: 2px; }
-                .ft-contact-item a, .ft-contact-item span { color: rgba(255,255,255,0.55); text-decoration: none; }
-                .ft-contact-item a:hover { color: ${GREEN}; }
+        /* Mobile accordion toggle */
+        .ft-accordion-toggle {
+          display: flex; align-items: center; justify-content: space-between;
+          width: 100%; background: none; border: none; padding: 0.15rem 0;
+          cursor: pointer;
+        }
+        .ft-chevron { color: ${GREEN}; transition: transform .2s ease; flex-shrink: 0; }
+        .ft-chevron.is-open { transform: rotate(180deg); }
 
-                .ft-newsletter-input:focus { box-shadow: 0 0 0 3px rgba(52,161,41,0.3); }
-                .ft-subscribe-btn { background: ${GREEN}; }
+        .ft-link-list { list-style: none; margin: 0; padding: 0; }
+        .ft-link-list li { margin-bottom: 0.6rem; }
+        .ft-link {
+          color: rgba(255,255,255,0.55); text-decoration: none; font-size: 0.88rem;
+          transition: color .2s ease;
+        }
+        .ft-link:hover { color: ${GREEN}; }
 
-                .ft-bottom { border-top: 1px solid rgba(255,255,255,0.1); padding: 1rem 0; }
-                .ft-bottom small, .ft-bottom .ft-legal-link { color: rgba(255,255,255,0.5); }
-                .ft-legal-link { text-decoration: none; font-size: 0.78rem; transition: color .2s ease; }
-                .ft-legal-link:hover { color: ${GREEN}; }
+        .ft-contact-item { display: flex; align-items: flex-start; gap: 0.65rem; margin-bottom: 0.7rem; font-size: 0.86rem; }
+        .ft-contact-item svg { color: ${GREEN}; flex-shrink: 0; margin-top: 3px; }
+        .ft-contact-item a, .ft-contact-item span { color: rgba(255,255,255,0.6); text-decoration: none; }
+        .ft-contact-item a:hover { color: ${GREEN}; }
 
-                /* ---- Mobile compaction ---- */
-                @media (max-width: 991.98px) {
-                    .ft-features { padding: 1rem 0; }
-                    .ft-feature-title { font-size: 0.72rem; }
-                    .ft-feature-sub { display: none; }
+        .ft-newsletter-row { display: flex; flex-direction: column; gap: 0.5rem; }
+        .ft-newsletter-input {
+          width: 100%; border: none; border-radius: 8px;
+          padding: 0.65rem 0.85rem; font-size: 0.85rem; color: ${NAVY};
+          font-family: 'Poppins', sans-serif;
+        }
+        .ft-newsletter-input:focus { outline: none; box-shadow: 0 0 0 3px rgba(52,161,41,0.35); }
+        .ft-subscribe-btn {
+          background: ${GREEN}; color: #fff; border: none; border-radius: 8px;
+          padding: 0.65rem 1.1rem; font-weight: 700; font-size: 0.85rem;
+          cursor: pointer; white-space: nowrap; flex-shrink: 0;
+          transition: background 0.18s ease;
+          width: 100%;
+        }
+        .ft-subscribe-btn:hover { background: #278a1e; }
 
-                    .ft-main { padding: 1.75rem 0; }
-                    .ft-brand-block { margin-bottom: 0.5rem; }
-                    .ft-tagline { font-size: 0.85rem; margin-bottom: 1rem !important; }
+        @media (min-width: 480px) {
+          .ft-newsletter-row { flex-direction: row; }
+          .ft-newsletter-input { width: auto; flex: 1; }
+          .ft-subscribe-btn { width: auto; }
+        }
 
-                    .ft-col { border-bottom: 1px solid rgba(255,255,255,0.08); padding: 0.85rem 0; }
-                    .ft-col:first-of-type { border-top: 1px solid rgba(255,255,255,0.08); }
+        /* ---------- Bottom bar ---------- */
+        .ft-bottom { border-top: 1px solid rgba(255,255,255,0.1); padding: 1.1rem 0; }
+        .ft-bottom-row {
+          display: flex; flex-direction: column; align-items: center; gap: 0.6rem; text-align: center;
+        }
+        @media (min-width: 768px) {
+          .ft-bottom-row { flex-direction: row; justify-content: space-between; text-align: left; }
+        }
+        .ft-copyright { font-size: 0.8rem; color: rgba(255,255,255,0.5); margin: 0; }
+        .ft-legal-row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; justify-content: center; }
+        .ft-legal-link { color: rgba(255,255,255,0.5); text-decoration: none; font-size: 0.78rem; transition: color .2s ease; }
+        .ft-legal-link:hover { color: ${GREEN}; }
+        .ft-legal-sep { color: rgba(255,255,255,0.25); font-size: 0.75rem; }
 
-                    .ft-accordion-toggle { color: #fff; }
-                    .ft-link-list { max-height: 0; overflow: hidden; margin: 0; transition: max-height .25s ease; }
-                    .ft-link-list.is-open { max-height: 300px; margin-top: 0.85rem; }
+        /* ==================== MOBILE ==================== */
+        @media (max-width: 991.98px) {
+          .ft-features { padding: 1.25rem 0; }
+          .ft-features-grid { grid-template-columns: repeat(2, 1fr); gap: 1.1rem 0.75rem; text-align: left; }
+          .ft-feature-item { display: flex; align-items: center; gap: 0.65rem; }
+          .ft-feature-icon-badge {
+            width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0;
+            background: rgba(52,161,41,0.15); display: flex; align-items: center; justify-content: center;
+          }
+          .ft-feature-title { font-size: 0.76rem; }
+          .ft-feature-sub { font-size: 0.68rem; }
 
-                    .ft-contact-col { padding-top: 0.85rem; }
-                }
-            `}</style>
+          .ft-main { padding: 1.75rem 0 0.5rem; }
+          .ft-brand-block { text-align: left; margin-bottom: 0.25rem; }
+          .ft-tagline { font-size: 0.85rem; }
+
+          .ft-heading-desktop { display: none; }
+
+          .ft-col { border-top: 1px solid rgba(255,255,255,0.08); padding: 1.05rem 0; }
+          .ft-contact-col { border-top: 1px solid rgba(255,255,255,0.08); padding: 1.05rem 0 1.5rem; }
+
+          .ft-link-list { max-height: 0; overflow: hidden; margin: 0; transition: max-height .25s ease; }
+          .ft-link-list.is-open { max-height: 320px; margin-top: 0.9rem; }
+        }
+
+        @media (min-width: 992px) {
+          .ft-accordion-toggle { display: none; }
+          .ft-heading-desktop { display: block; }
+          .ft-link-list { max-height: none !important; overflow: visible; }
+        }
+
+        @media (max-width: 400px) {
+          .ft-features-grid { grid-template-columns: 1fr; }
+        }
+      `}</style>
 
       {/* Features Bar */}
       <div className="ft-features">
-        <div className="container">
-          <div className="row g-3 text-center">
+        <div className="ft-inner">
+          <div className="ft-features-grid">
             {FEATURES.map(({ Icon, title, sub }) => (
-              <div key={title} className="col-3">
-                <Icon size={24} className="ft-feature-icon mb-2" />
-                <h6 className="ft-feature-title">{title}</h6>
-                <small className="ft-feature-sub">{sub}</small>
+              <div key={title} className="ft-feature-item">
+                <span className="ft-feature-icon-badge">
+                  <Icon
+                    size={16}
+                    className="ft-feature-icon"
+                    style={{ marginBottom: 0 }}
+                  />
+                </span>
+                <div>
+                  <h6 className="ft-feature-title">{title}</h6>
+                  <span className="ft-feature-sub">{sub}</span>
+                </div>
               </div>
             ))}
           </div>
@@ -179,22 +262,23 @@ const Footer = () => {
 
       {/* Main Footer Content */}
       <div className="ft-main">
-        <div className="container">
-          <div className="row g-0 g-lg-4">
+        <div className="ft-inner">
+          <div className="ft-grid">
             {/* Brand Column */}
-            <div className="col-lg-4 ft-brand-block">
-              <Link to="/" className="text-decoration-none">
-                <h4 className="ft-brand-name mb-3">
-                  <span className="text-white">Recomm</span>
-                  <span style={{ color: GREEN }}>Frontend</span>
-                </h4>
+            <div className="ft-brand-block">
+              <Link
+                to="/"
+                className="ft-brand-name"
+                style={{ display: "inline-block", height: "75px" }}
+              >
+                <img src={logoDark} alt="Recomm Logo" style={{ height: "100%", width: "auto", objectFit: "contain" }} />
               </Link>
-              <p className="ft-tagline mb-4">
+              <p className="ft-tagline">
                 Delicious food &amp; beverages delivered to your door. We bring
                 quality, freshness, and convenience to your table every single
                 day.
               </p>
-              <div className="d-flex gap-2 mb-3 mb-lg-0">
+              <div className="ft-social-row">
                 {SOCIAL_LINKS.map(({ Icon, href, label }) => (
                   <a
                     key={label}
@@ -211,53 +295,53 @@ const Footer = () => {
             </div>
 
             {/* Quick Links */}
-            <div className="col-lg-2 col-6">
-              <FooterLinkList
-                title="Company"
-                links={COMPANY_LINKS}
-                open={companyOpen}
-                onToggle={() => setCompanyOpen((v) => !v)}
-              />
-            </div>
+            <FooterLinkList
+              title="Company"
+              links={COMPANY_LINKS}
+              open={companyOpen}
+              onToggle={() => setCompanyOpen((v) => !v)}
+            />
 
             {/* Customer Service */}
-            <div className="col-lg-2 col-6">
-              <FooterLinkList
-                title="Support"
-                links={SUPPORT_LINKS}
-                open={supportOpen}
-                onToggle={() => setSupportOpen((v) => !v)}
-              />
-            </div>
+            <FooterLinkList
+              title="Support"
+              links={SUPPORT_LINKS}
+              open={supportOpen}
+              onToggle={() => setSupportOpen((v) => !v)}
+            />
 
             {/* Contact Info */}
-            <div className="col-lg-4 ft-contact-col">
-              <h6 className="ft-heading mb-3">Contact Us</h6>
+            <div className="ft-contact-col">
+              <h6 className="ft-heading" style={{ marginBottom: "0.9rem" }}>
+                Contact Us
+              </h6>
               <div className="ft-contact-item">
-                <FaMapMarkerAlt />
+                <FaMapMarkerAlt size={13} />
                 <span>123 Food Street, Flavor Town, FT 12345, USA</span>
               </div>
               <div className="ft-contact-item">
-                <FaPhone />
+                <FaPhone size={13} />
                 <a href="tel:1-800-RECOMM">1-800-RECOMM (732-6663)</a>
               </div>
-              <div className="ft-contact-item mb-3">
-                <FaEnvelope />
+              <div
+                className="ft-contact-item"
+                style={{ marginBottom: "1.1rem" }}
+              >
+                <FaEnvelope size={13} />
                 <a href="mailto:info@recomm.com">info@recomm.com</a>
               </div>
 
-              <h6 className="ft-heading mb-2">Newsletter</h6>
-              <div className="input-group">
+              <h6 className="ft-heading" style={{ marginBottom: "0.6rem" }}>
+                Newsletter
+              </h6>
+              <div className="ft-newsletter-row">
                 <input
                   type="email"
-                  className="form-control form-control-sm ft-newsletter-input bg-white border-0"
+                  className="ft-newsletter-input"
                   placeholder="Your email address"
                   aria-label="Email for newsletter"
                 />
-                <button
-                  className="btn btn-sm ft-subscribe-btn text-white"
-                  type="button"
-                >
+                <button className="ft-subscribe-btn" type="button">
                   Subscribe
                 </button>
               </div>
@@ -268,29 +352,21 @@ const Footer = () => {
 
       {/* Bottom Bar */}
       <div className="ft-bottom">
-        <div className="container">
-          <div className="row align-items-center g-2">
-            <div className="col-md-6 text-center text-md-start">
-              <small>
-                © {currentYear} Recomm-Frontend. All rights reserved. Made with
-                ❤️
-              </small>
-            </div>
-            <div className="col-md-6 text-center text-md-end">
+        <div className="ft-inner">
+          <div className="ft-bottom-row">
+            <p className="ft-copyright">
+              © {currentYear} Recomm. All rights reserved. Made with ❤️
+            </p>
+            <div className="ft-legal-row">
               {BOTTOM_LINKS.map((link, index, arr) => (
-                <span key={link.label}>
+                <React.Fragment key={link.label}>
                   <Link to={link.path} className="ft-legal-link">
                     {link.label}
                   </Link>
                   {index < arr.length - 1 && (
-                    <span
-                      className="mx-2"
-                      style={{ color: "rgba(255,255,255,0.3)" }}
-                    >
-                      |
-                    </span>
+                    <span className="ft-legal-sep">|</span>
                   )}
-                </span>
+                </React.Fragment>
               ))}
             </div>
           </div>

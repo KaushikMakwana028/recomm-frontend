@@ -19,6 +19,7 @@ import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { useWishlist } from "../context/WishlistContext";
 import SearchBar from "../components/SearchBar";
+import logoDark from "../assets/recomm-logo-sidebar.png";
 
 const NAVY = "#00204E";
 const NAVY_LIGHT = "#0A2E5C";
@@ -111,6 +112,23 @@ const Header = () => {
                     min-width: 0;
                     overflow: hidden;
                     text-overflow: ellipsis;
+                    display: inline-flex;
+                    align-items: center;
+                }
+
+                .rc-brand-img {
+                    height: 64px;
+                    width: auto;
+                    object-fit: contain;
+                    transition: height .2s ease;
+                }
+
+                @media (max-width: 991.98px) {
+                    .rc-brand-img { height: 50px; }
+                }
+
+                @media (max-width: 360px) {
+                    .rc-brand-img { height: 42px; }
                 }
 
                 .rc-nav-link {
@@ -488,12 +506,11 @@ const Header = () => {
       >
         <div className="container d-flex align-items-center justify-content-between">
           <Link
-            className="rc-brand navbar-brand fw-bold me-3"
+            className="rc-brand navbar-brand me-3"
             to="/"
-            aria-label="Recomm-Frontend Home"
+            aria-label="Recomm Home"
           >
-            <span className="text-white">Recomm</span>
-            <span style={{ color: GREEN }}>Frontend</span>
+            <img src={logoDark} alt="Recomm Logo" className="rc-brand-img" />
           </Link>
 
           {/* Desktop nav links */}
@@ -723,10 +740,13 @@ const Header = () => {
             aria-hidden={!menuOpen}
           >
             <div className="rc-drawer-header">
-              <span className="rc-brand fw-bold fs-5">
-                <span className="text-white">Recomm</span>
-                <span style={{ color: GREEN }}>Frontend</span>
-              </span>
+              <Link
+                to="/"
+                onClick={closeMenu}
+                className="rc-brand d-flex align-items-center text-decoration-none"
+              >
+                <img src={logoDark} alt="Recomm Logo" className="rc-brand-img" style={{ height: "50px" }} />
+              </Link>
               <button
                 className="rc-drawer-close"
                 onClick={closeMenu}

@@ -7,463 +7,422 @@ import React, {
   useEffect,
 } from "react";
 import {
-  FaCheckCircle,
-  FaExclamationCircle,
-  FaInfoCircle,
-  FaExclamationTriangle,
-  FaTimes,
-} from "react-icons/fa";
+  CheckCircle2,
+  AlertCircle,
+  Info,
+  TriangleAlert,
+  X,
+} from "lucide-react";
+
+/* ============================================================
+   SIGNAL — a toast & alert system built around one idea:
+   a live "signal rail" on each card (colour + a breathing dot)
+   paired with a running mono countdown, like a status light on
+   a piece of hardware rather than a generic glass card.
+   ============================================================ */
+
 const ToastContext = createContext();
 
-const TOAST_STYLES = `
+const STYLES = `
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap');
+
 :root {
-  --success: #059669;
-  --success-light: #10b981;
-  --success-rgb: 16, 185, 129;
+  --canvas: #eceff3;
+  --card: #ffffff;
+  --hairline: #e1e5eb;
+  --ink: #12141a;
+  --ink-muted: #6b7280;
+  --ink-faint: #9aa1ad;
 
-  --error: #e11d48;
-  --error-light: #fb7185;
-  --error-rgb: 251, 113, 133;
+  --success: #187a52;
+  --success-bright: #34d399;
+  --error: #b8283a;
+  --error-bright: #fb6a6a;
+  --warning: #a9670c;
+  --warning-bright: #f2a93b;
+  --info: #2a52c9;
+  --info-bright: #5b8def;
 
-  --warning: #d97706;
-  --warning-light: #fbbf24;
-  --warning-rgb: 251, 191, 36;
-
-  --info: #2563eb;
-  --info-light: #38bdf8;
-  --info-rgb: 56, 189, 248;
-
-  --glass-text: #0f172a;
-  --glass-text-muted: #475569;
-  --glass-radius: 20px;
+  --radius: 14px;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
 }
 
-/* ---------- Toast stack ---------- */
-.toast-container {
+.sig-canvas {
+  font-family: var(--font-body);
+  background: var(--canvas);
+  color: var(--ink);
+}
+
+/* ---------------- Toast stack ---------------- */
+.sig-toast-container {
   position: fixed;
-  top: 22px;
-  right: 22px;
+  top: 20px;
+  right: 20px;
   z-index: 2000;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
-  max-width: 380px;
+  max-width: 360px;
   pointer-events: none;
 }
 
-.toast-item {
+.sig-toast {
   position: relative;
   display: flex;
   align-items: flex-start;
-  gap: 13px;
-  padding: 16px 40px 22px 16px;
-  border-radius: var(--glass-radius);
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.4));
-  border: 1px solid rgba(255, 255, 255, 0.55);
-  -webkit-backdrop-filter: blur(22px) saturate(180%);
-  backdrop-filter: blur(22px) saturate(180%);
-  box-shadow:
-    0 12px 40px -10px rgba(15, 23, 42, 0.22),
-    0 2px 10px rgba(15, 23, 42, 0.07),
-    inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  gap: 12px;
+  padding: 14px 16px 14px 18px;
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px -8px rgba(18, 20, 26, 0.18), 0 1px 2px rgba(18, 20, 26, 0.06);
   overflow: hidden;
   pointer-events: auto;
-  animation: toast-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: sig-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.toast-item--closing {
-  animation: toast-out 0.22s ease-in forwards;
+.sig-toast--closing { animation: sig-out 0.18s ease-in forwards; }
+
+@keyframes sig-in {
+  from { opacity: 0; transform: translateX(18px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes sig-out {
+  to { opacity: 0; transform: translateX(10px) scale(0.97); }
 }
 
-@keyframes toast-in {
-  from { opacity: 0; transform: translateY(-10px) scale(0.94); filter: blur(6px); }
-  to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
-}
-
-@keyframes toast-out {
-  to { opacity: 0; transform: translateY(6px) scale(0.95); filter: blur(4px); }
-}
-
-/* soft ambient wash behind the icon, tinted per type */
-.toast-item::before {
-  content: "";
+/* the signal rail: solid colour bar + breathing dot at its head */
+.sig-rail {
   position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: radial-gradient(80px 60px at 0% 0%, rgba(var(--tone-rgb), 0.16), transparent 70%);
-  pointer-events: none;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--tone);
 }
 
-.toast-success { --tone-rgb: var(--success-rgb); }
-.toast-error   { --tone-rgb: var(--error-rgb); }
-.toast-warning { --tone-rgb: var(--warning-rgb); }
-.toast-info    { --tone-rgb: var(--info-rgb); }
-
-.toast-icon-wrap {
-  position: relative;
-  z-index: 1;
-  flex-shrink: 0;
-  width: 34px;
-  height: 34px;
-}
-
-.toast-icon-wrap::before {
-  content: "";
+.sig-dot {
   position: absolute;
-  inset: -9px;
+  left: -2.5px;
+  top: -3px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: rgb(var(--tone-rgb));
-  filter: blur(13px);
-  opacity: 0.45;
+  background: var(--tone);
+  box-shadow: 0 0 0 0 var(--tone);
+  animation: sig-pulse 1.8s ease-out infinite;
 }
 
-.toast-icon-badge {
-  position: relative;
-  z-index: 1;
+@keyframes sig-pulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--tone) 55%, transparent); }
+  70%  { box-shadow: 0 0 0 7px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+.sig-toast--success { --tone: var(--success); }
+.sig-toast--error   { --tone: var(--error); }
+.sig-toast--warning { --tone: var(--warning); }
+.sig-toast--info    { --tone: var(--info); }
+
+.sig-icon {
+  flex-shrink: 0;
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: rgba(var(--tone-rgb), 0.18);
-  border: 1px solid rgba(var(--tone-rgb), 0.4);
-  color: rgb(var(--tone-rgb));
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--tone) 13%, white);
+  color: var(--tone);
+  margin-left: 4px;
 }
 
-.toast-success .toast-icon-badge { color: var(--success); }
-.toast-error   .toast-icon-badge { color: var(--error); }
-.toast-warning .toast-icon-badge { color: var(--warning); }
-.toast-info    .toast-icon-badge { color: var(--info); }
+.sig-body { flex: 1; min-width: 0; padding-top: 1px; }
 
-.toast-body { position: relative; z-index: 1; flex: 1; min-width: 0; }
-
-.toast-title {
+.sig-title {
   margin: 0 0 2px;
+  font-family: var(--font-display);
   font-size: 13.5px;
-  font-weight: 650;
-  color: var(--glass-text);
+  font-weight: 600;
   letter-spacing: -0.01em;
+  color: var(--ink);
 }
 
-.toast-message {
+.sig-message {
   margin: 0;
   font-size: 13px;
   line-height: 1.45;
-  color: var(--glass-text-muted);
+  color: var(--ink-muted);
   word-break: break-word;
 }
 
-.toast-close {
-  position: absolute;
-  z-index: 1;
-  top: 10px;
-  right: 10px;
+.sig-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: 4px;
+  margin-top: 1px;
+}
+
+.sig-countdown {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-faint);
+  min-width: 30px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.sig-close {
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.35);
-  color: var(--glass-text-muted);
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-faint);
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease;
 }
+.sig-close:hover { background: #f0f1f4; color: var(--ink); }
+.sig-close:focus-visible { outline: 2px solid var(--tone); outline-offset: 1px; }
 
-.toast-close:hover {
-  background: rgba(255, 255, 255, 0.6);
-  color: var(--glass-text);
-  transform: scale(1.06);
-}
-
-.toast-progress-track {
+.sig-progress-track {
   position: absolute;
-  z-index: 1;
-  left: 14px;
-  right: 14px;
-  bottom: 10px;
-  height: 4px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.35);
-  overflow: hidden;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: transparent;
 }
-
-.toast-progress {
+.sig-progress {
   display: block;
   height: 100%;
   width: 100%;
-  border-radius: 999px;
   transform-origin: left;
-  background: linear-gradient(90deg, rgb(var(--tone-rgb)), rgba(var(--tone-rgb), 0.7));
-  box-shadow: 0 0 8px rgba(var(--tone-rgb), 0.6);
-  animation-name: toast-progress-shrink;
+  background: var(--tone);
+  opacity: 0.55;
+  animation-name: sig-shrink;
   animation-timing-function: linear;
   animation-fill-mode: forwards;
 }
+@keyframes sig-shrink { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 
-@keyframes toast-progress-shrink {
-  from { transform: scaleX(1); }
-  to { transform: scaleX(0); }
-}
-
-/* ---------- Big alert modal ---------- */
-.big-alert-overlay {
+/* ---------------- Big alert ---------------- */
+.sig-overlay {
   position: fixed;
   inset: 0;
   z-index: 2100;
   display: grid;
   place-items: center;
   padding: 20px;
-  background: rgba(10, 14, 22, 0.5);
-  -webkit-backdrop-filter: blur(8px) saturate(140%);
-  backdrop-filter: blur(8px) saturate(140%);
-  animation: overlay-in 0.25s ease both;
+  background: rgba(15, 17, 22, 0.45);
+  animation: sig-overlay-in 0.2s ease both;
 }
+.sig-overlay--closing { animation: sig-overlay-out 0.15s ease forwards; }
+@keyframes sig-overlay-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sig-overlay-out { to { opacity: 0; } }
 
-.big-alert-overlay--closing { animation: overlay-out 0.2s ease forwards; }
-
-@keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }
-@keyframes overlay-out { to { opacity: 0; } }
-
-.big-alert-box {
+.sig-modal {
   position: relative;
   width: 100%;
-  max-width: 380px;
-  padding: 40px 32px 30px;
-  border-radius: 26px;
-  background: linear-gradient(165deg, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.55));
-  border: 1px solid rgba(255, 255, 255, 0.65);
-  -webkit-backdrop-filter: blur(30px) saturate(200%);
-  backdrop-filter: blur(30px) saturate(200%);
-  box-shadow:
-    0 30px 80px -18px rgba(15, 23, 42, 0.45),
-    0 0 0 1px rgba(255, 255, 255, 0.4) inset,
-    0 40px 90px -20px rgba(var(--tone-rgb), 0.25);
-  text-align: center;
+  max-width: 360px;
+  padding: 28px 26px 24px;
+  background: var(--card);
+  border-radius: 18px;
+  border: 1px solid var(--hairline);
+  box-shadow: 0 30px 70px -20px rgba(18, 20, 26, 0.4);
   overflow: hidden;
-  animation: box-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: sig-modal-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.sig-modal--closing { animation: sig-modal-out 0.16s ease-in forwards; }
+
+@keyframes sig-modal-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes sig-modal-out {
+  to { opacity: 0; transform: translateY(6px) scale(0.97); }
 }
 
-.big-alert-box--closing { animation: box-out 0.2s ease-in forwards; }
-
-.big-alert-box--success { --tone-rgb: var(--success-rgb); }
-.big-alert-box--error   { --tone-rgb: var(--error-rgb); }
-.big-alert-box--warning { --tone-rgb: var(--warning-rgb); }
-.big-alert-box--info    { --tone-rgb: var(--info-rgb); }
-
-.big-alert-box::before {
-  content: "";
+.sig-modal-rail {
   position: absolute;
-  inset: 0;
-  background: radial-gradient(160px 110px at 50% -10%, rgba(var(--tone-rgb), 0.3), transparent 70%);
-  pointer-events: none;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--tone);
 }
 
-@keyframes box-in {
-  from { opacity: 0; transform: translateY(14px) scale(0.92); filter: blur(6px); }
-  to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
-}
+.sig-modal--success { --tone: var(--success); }
+.sig-modal--error   { --tone: var(--error); }
+.sig-modal--warning { --tone: var(--warning); }
+.sig-modal--info    { --tone: var(--info); }
 
-@keyframes box-out {
-  to { opacity: 0; transform: translateY(8px) scale(0.95); filter: blur(4px); }
-}
-
-.big-alert-dismiss {
+.sig-modal-dismiss {
   position: absolute;
-  z-index: 1;
   top: 16px;
   right: 16px;
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.35);
-  color: var(--glass-text-muted);
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-faint);
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease;
 }
+.sig-modal-dismiss:hover { background: #f0f1f4; color: var(--ink); }
+.sig-modal-dismiss:focus-visible { outline: 2px solid var(--tone); outline-offset: 1px; }
 
-.big-alert-dismiss:hover {
-  background: rgba(255, 255, 255, 0.65);
-  color: var(--glass-text);
-  transform: scale(1.06);
+.sig-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tone);
+  margin-bottom: 14px;
 }
-
-.big-alert-icon-wrapper {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  justify-content: center;
-  margin-bottom: 20px;
-}
-
-.big-alert-icon-wrapper::before {
+.sig-eyebrow::before {
   content: "";
-  position: absolute;
-  width: 90px;
-  height: 90px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: rgb(var(--tone-rgb));
-  filter: blur(22px);
-  opacity: 0.4;
+  background: var(--tone);
 }
 
-.big-alert-icon-badge {
-  position: relative;
+.sig-modal-icon {
   display: grid;
   place-items: center;
-  width: 68px;
-  height: 68px;
-  border-radius: 50%;
-  background: rgba(var(--tone-rgb), 0.18);
-  border: 1px solid rgba(var(--tone-rgb), 0.4);
-  animation: icon-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 0.1s both;
-}
-
-.big-alert-box--success .big-alert-icon-badge { color: var(--success); }
-.big-alert-box--error   .big-alert-icon-badge { color: var(--error); }
-.big-alert-box--warning .big-alert-icon-badge { color: var(--warning); }
-.big-alert-box--info    .big-alert-icon-badge { color: var(--info); }
-
-@keyframes icon-pop {
-  from { opacity: 0; transform: scale(0.6); }
-  to { opacity: 1; transform: scale(1); }
-}
-
-.big-alert-title {
-  position: relative;
-  z-index: 1;
-  margin: 0 0 8px;
-  font-size: 19px;
-  font-weight: 700;
-  color: var(--glass-text);
-  letter-spacing: -0.01em;
-}
-
-.big-alert-message {
-  position: relative;
-  z-index: 1;
-  margin: 0 0 28px;
-  font-size: 14px;
-  line-height: 1.55;
-  color: var(--glass-text-muted);
-}
-
-.big-alert-button {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  padding: 13px;
-  border: none;
+  width: 52px;
+  height: 52px;
   border-radius: 14px;
+  background: color-mix(in srgb, var(--tone) 13%, white);
+  color: var(--tone);
+  margin-bottom: 16px;
+}
+
+.sig-modal-title {
+  margin: 0 0 6px;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.sig-modal-message {
+  margin: 0 0 22px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ink-muted);
+}
+
+.sig-modal-button {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 11px;
+  background: var(--tone);
   color: #fff;
-  font-size: 14.5px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
-  overflow: hidden;
-  background: linear-gradient(135deg, var(--success-light), var(--success));
-  box-shadow: 0 10px 24px -6px rgba(var(--success-rgb), 0.55);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition: filter 0.15s ease, transform 0.15s ease;
 }
+.sig-modal-button:hover { filter: brightness(1.08); }
+.sig-modal-button:active { transform: scale(0.99); }
+.sig-modal-button:focus-visible { outline: 2px solid var(--tone); outline-offset: 2px; }
 
-.big-alert-box--error .big-alert-button {
-  background: linear-gradient(135deg, var(--error-light), var(--error));
-  box-shadow: 0 10px 24px -6px rgba(var(--error-rgb), 0.55);
-}
-.big-alert-box--warning .big-alert-button {
-  background: linear-gradient(135deg, var(--warning-light), var(--warning));
-  box-shadow: 0 10px 24px -6px rgba(var(--warning-rgb), 0.55);
-}
-.big-alert-box--info .big-alert-button {
-  background: linear-gradient(135deg, var(--info-light), var(--info));
-  box-shadow: 0 10px 24px -6px rgba(var(--info-rgb), 0.55);
-}
-
-.big-alert-button:hover { transform: translateY(-1px); }
-.big-alert-button:active { transform: translateY(0); }
-
-.checkmark {
-  position: relative;
-  width: 40px;
-  height: 40px;
+.sig-check {
+  width: 26px;
+  height: 26px;
   stroke-width: 3;
-  stroke: var(--success);
-  stroke-miterlimit: 10;
-}
-
-.checkmark-circle {
-  stroke-dasharray: 166;
-  stroke-dashoffset: 166;
-  stroke-width: 3;
-  stroke: var(--success);
+  stroke: currentColor;
   fill: none;
-  animation: checkmark-stroke 0.5s cubic-bezier(0.65, 0, 0.45, 1) 0.1s forwards;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
-
-.checkmark-check {
-  transform-origin: 50% 50%;
-  stroke-dasharray: 48;
-  stroke-dashoffset: 48;
-  animation: checkmark-stroke 0.3s cubic-bezier(0.65, 0, 0.45, 1) 0.55s forwards;
+.sig-check-circle {
+  stroke-dasharray: 76;
+  stroke-dashoffset: 76;
+  animation: sig-check-draw 0.4s ease 0.05s forwards;
 }
+.sig-check-mark {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  animation: sig-check-draw 0.25s ease 0.4s forwards;
+}
+@keyframes sig-check-draw { to { stroke-dashoffset: 0; } }
 
-@keyframes checkmark-stroke { 100% { stroke-dashoffset: 0; } }
-
-/* ---------- Responsive ---------- */
 @media (max-width: 480px) {
-  .toast-container { top: 12px; right: 12px; left: 12px; max-width: none; }
-  .big-alert-box { padding: 32px 24px 26px; }
+  .sig-toast-container { top: 10px; right: 10px; left: 10px; max-width: none; }
+  .sig-modal { padding: 24px 20px 20px; }
 }
 
-/* ---------- Reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
-  .toast-item,
-  .toast-item--closing,
-  .big-alert-overlay,
-  .big-alert-box,
-  .big-alert-icon-badge,
-  .checkmark-circle,
-  .checkmark-check {
+  .sig-toast, .sig-toast--closing, .sig-overlay, .sig-overlay--closing,
+  .sig-modal, .sig-modal--closing, .sig-dot, .sig-check-circle, .sig-check-mark {
     animation-duration: 0.01ms !important;
   }
 }
 `;
 
 export const useToast = () => {
-  const context = useContext(ToastContext);
-  if (!context) throw new Error("useToast must be used within a ToastProvider");
-  return context;
+  const ctx = useContext(ToastContext);
+  if (!ctx) throw new Error("useToast must be used within a ToastProvider");
+  return ctx;
 };
 
 const ICONS = {
-  success: FaCheckCircle,
-  error: FaExclamationCircle,
-  warning: FaExclamationTriangle,
-  info: FaInfoCircle,
+  success: CheckCircle2,
+  error: AlertCircle,
+  warning: TriangleAlert,
+  info: Info,
+};
+
+const LABELS = {
+  success: "Success",
+  error: "Error",
+  warning: "Warning",
+  info: "Info",
 };
 
 export const ToastProvider = ({ children }) => {
   const [toasts, setToasts] = useState([]);
   const [bigAlert, setBigAlert] = useState(null);
   const [bigAlertClosing, setBigAlertClosing] = useState(false);
+  const [, tick] = useState(0);
 
-  // Per-toast timer bookkeeping so we can pause/resume on hover
-  // without losing track of how much time is left.
   const timers = useRef({}); // { [id]: { timeoutId, remaining, startedAt } }
+
+  // drive the mono countdown digits
+  useEffect(() => {
+    const iv = setInterval(() => tick((n) => n + 1), 100);
+    return () => clearInterval(iv);
+  }, []);
 
   const removeToast = useCallback((id) => {
     setToasts((prev) =>
       prev.map((t) => (t.id === id ? { ...t, closing: true } : t)),
     );
-    // Let the exit animation play before actually unmounting.
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
       delete timers.current[id];
-    }, 220);
+    }, 180);
   }, []);
 
   const startTimer = useCallback(
@@ -504,11 +463,19 @@ export const ToastProvider = ({ children }) => {
   );
 
   const showToast = useCallback(
-    (message, type = "success", duration = 3500, title = null) => {
-      const id = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    (message, type = "success", duration = 4000, title = null) => {
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
       setToasts((prev) => [
         ...prev,
-        { id, message, type, title, duration, paused: false, closing: false },
+        {
+          id,
+          message,
+          type,
+          title: title ?? LABELS[type],
+          duration,
+          paused: false,
+          closing: false,
+        },
       ]);
       startTimer(id, duration);
       return id;
@@ -540,10 +507,9 @@ export const ToastProvider = ({ children }) => {
         return null;
       });
       setBigAlertClosing(false);
-    }, 200);
+    }, 160);
   }, []);
 
-  // Close big alert on Escape for keyboard users.
   useEffect(() => {
     if (!bigAlert) return;
     const onKeyDown = (e) => e.key === "Escape" && closeBigAlert();
@@ -551,48 +517,65 @@ export const ToastProvider = ({ children }) => {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [bigAlert, closeBigAlert]);
 
+  const remainingFor = (t) => {
+    const timer = timers.current[t.id];
+    if (!timer) return 0;
+    const r = t.paused
+      ? timer.remaining
+      : timer.remaining - (Date.now() - timer.startedAt);
+    return Math.max(r, 0);
+  };
+
   const value = { showToast, closeToast, showBigAlert, closeBigAlert };
 
   return (
     <ToastContext.Provider value={value}>
       {children}
+      <style>{STYLES}</style>
 
-      <style>{TOAST_STYLES}</style>
-
-      {/* Toast stack */}
-      <div className="toast-container" aria-live="polite" aria-atomic="false">
+      <div
+        className="sig-toast-container"
+        aria-live="polite"
+        aria-atomic="false"
+      >
         {toasts.map((t) => {
-          const Icon = ICONS[t.type] || FaInfoCircle;
+          const Icon = ICONS[t.type] || Info;
+          const secs = (remainingFor(t) / 1000).toFixed(1);
           return (
             <div
               key={t.id}
               role="status"
-              className={`toast-item toast-${t.type} ${t.closing ? "toast-item--closing" : ""}`}
+              className={`sig-toast sig-toast--${t.type} ${t.closing ? "sig-toast--closing" : ""}`}
               onMouseEnter={() => pauseTimer(t.id)}
               onMouseLeave={() => resumeTimer(t.id)}
             >
-              <span className="toast-icon-wrap">
-                <span className="toast-icon-badge">
-                  <Icon size={16} />
-                </span>
+              <span className="sig-rail">
+                <span className="sig-dot" />
               </span>
 
-              <div className="toast-body">
-                {t.title && <p className="toast-title">{t.title}</p>}
-                <p className="toast-message">{t.message}</p>
+              <span className="sig-icon">
+                <Icon size={16} strokeWidth={2.25} />
+              </span>
+
+              <div className="sig-body">
+                {t.title && <p className="sig-title">{t.title}</p>}
+                <p className="sig-message">{t.message}</p>
               </div>
 
-              <button
-                className="toast-close"
-                onClick={() => closeToast(t.id)}
-                aria-label="Dismiss notification"
-              >
-                <FaTimes size={11} />
-              </button>
+              <div className="sig-meta">
+                <span className="sig-countdown">{secs}s</span>
+                <button
+                  className="sig-close"
+                  onClick={() => closeToast(t.id)}
+                  aria-label="Dismiss notification"
+                >
+                  <X size={12} strokeWidth={2.5} />
+                </button>
+              </div>
 
-              <span className="toast-progress-track">
+              <span className="sig-progress-track">
                 <span
-                  className="toast-progress"
+                  className="sig-progress"
                   style={{
                     animationDuration: `${t.duration}ms`,
                     animationPlayState: t.paused ? "paused" : "running",
@@ -604,52 +587,48 @@ export const ToastProvider = ({ children }) => {
         })}
       </div>
 
-      {/* Big modal alert */}
       {bigAlert && (
         <div
-          className={`big-alert-overlay ${bigAlertClosing ? "big-alert-overlay--closing" : ""}`}
+          className={`sig-overlay ${bigAlertClosing ? "sig-overlay--closing" : ""}`}
           onMouseDown={(e) => e.target === e.currentTarget && closeBigAlert()}
         >
           <div
-            className={`big-alert-box big-alert-box--${bigAlert.type} ${
-              bigAlertClosing ? "big-alert-box--closing" : ""
-            }`}
+            className={`sig-modal sig-modal--${bigAlert.type} ${bigAlertClosing ? "sig-modal--closing" : ""}`}
             role="alertdialog"
             aria-modal="true"
           >
+            <span className="sig-modal-rail" />
+
             <button
-              className="big-alert-dismiss"
+              className="sig-modal-dismiss"
               onClick={closeBigAlert}
               aria-label="Close dialog"
             >
-              <FaTimes size={14} />
+              <X size={14} strokeWidth={2.5} />
             </button>
 
-            <div className="big-alert-icon-wrapper">
+            <span className="sig-eyebrow">
+              Status · {LABELS[bigAlert.type]}
+            </span>
+
+            <div className="sig-modal-icon">
               {bigAlert.type === "success" ? (
-                <svg className="checkmark" viewBox="0 0 52 52">
-                  <circle className="checkmark-circle" cx="26" cy="26" r="25" />
-                  <path
-                    className="checkmark-check"
-                    d="M14.1 27.2l7.1 7.2 16.7-16.8"
-                  />
+                <svg className="sig-check" viewBox="0 0 26 26">
+                  <circle className="sig-check-circle" cx="13" cy="13" r="11" />
+                  <path className="sig-check-mark" d="M7.5 13.5l3.5 3.5 8-8" />
                 </svg>
               ) : (
                 (() => {
-                  const Icon = ICONS[bigAlert.type] || FaInfoCircle;
-                  return (
-                    <span className="big-alert-icon-badge">
-                      <Icon size={30} />
-                    </span>
-                  );
+                  const Icon = ICONS[bigAlert.type] || Info;
+                  return <Icon size={26} strokeWidth={2.25} />;
                 })()
               )}
             </div>
 
-            <h3 className="big-alert-title">{bigAlert.title}</h3>
-            <p className="big-alert-message">{bigAlert.message}</p>
+            <h3 className="sig-modal-title">{bigAlert.title}</h3>
+            <p className="sig-modal-message">{bigAlert.message}</p>
 
-            <button className="big-alert-button" onClick={closeBigAlert}>
+            <button className="sig-modal-button" onClick={closeBigAlert}>
               {bigAlert.buttonText}
             </button>
           </div>
@@ -658,3 +637,170 @@ export const ToastProvider = ({ children }) => {
     </ToastContext.Provider>
   );
 };
+
+/* ---------------- Demo ---------------- */
+const DemoPanel = () => {
+  const { showToast, showBigAlert } = useToast();
+
+  const btnBase = {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    padding: "11px 16px",
+    borderRadius: 11,
+    border: "1px solid var(--hairline)",
+    background: "#fff",
+    fontFamily: "var(--font-body)",
+    fontSize: 13.5,
+    fontWeight: 600,
+    cursor: "pointer",
+    color: "var(--ink)",
+  };
+
+  const dot = (color) => ({
+    width: 8,
+    height: 8,
+    borderRadius: "50%",
+    background: color,
+    flexShrink: 0,
+  });
+
+  return (
+    <div
+      className="sig-canvas"
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 40,
+      }}
+    >
+      <div style={{ width: "100%", maxWidth: 460 }}>
+        <span
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+            fontWeight: 600,
+            letterSpacing: "0.1em",
+            textTransform: "uppercase",
+            color: "var(--ink-faint)",
+          }}
+        >
+          Component / Notifications
+        </span>
+        <h1
+          style={{
+            fontFamily: "var(--font-display)",
+            fontSize: 30,
+            fontWeight: 700,
+            letterSpacing: "-0.02em",
+            margin: "6px 0 6px",
+          }}
+        >
+          Signal
+        </h1>
+        <p
+          style={{
+            color: "var(--ink-muted)",
+            fontSize: 14,
+            lineHeight: 1.55,
+            margin: "0 0 28px",
+          }}
+        >
+          Toasts and alerts that read as a status light on real hardware — a
+          coloured rail, a breathing pulse, and a live countdown instead of a
+          generic progress bar.
+        </p>
+
+        <div
+          style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}
+        >
+          <button
+            style={btnBase}
+            onClick={() =>
+              showToast(
+                "Changes saved to your workspace.",
+                "success",
+                4000,
+                "Saved",
+              )
+            }
+          >
+            <span style={dot("var(--success)")} /> Success
+          </button>
+          <button
+            style={btnBase}
+            onClick={() =>
+              showToast(
+                "Couldn't reach the server. Try again.",
+                "error",
+                4500,
+                "Request failed",
+              )
+            }
+          >
+            <span style={dot("var(--error)")} /> Error
+          </button>
+          <button
+            style={btnBase}
+            onClick={() =>
+              showToast(
+                "Your session expires in 5 minutes.",
+                "warning",
+                5000,
+                "Session ending",
+              )
+            }
+          >
+            <span style={dot("var(--warning)")} /> Warning
+          </button>
+          <button
+            style={btnBase}
+            onClick={() =>
+              showToast(
+                "A newer version of this page is available.",
+                "info",
+                4000,
+                "Update available",
+              )
+            }
+          >
+            <span style={dot("var(--info)")} /> Info
+          </button>
+        </div>
+
+        <button
+          style={{
+            ...btnBase,
+            width: "100%",
+            justifyContent: "center",
+            marginTop: 10,
+            background: "var(--ink)",
+            color: "#fff",
+            border: "none",
+          }}
+          onClick={() =>
+            showBigAlert({
+              title: "Payment confirmed",
+              message:
+                "Your subscription is active. A receipt has been sent to your email.",
+              type: "success",
+              buttonText: "Continue",
+            })
+          }
+        >
+          Open big alert
+        </button>
+      </div>
+    </div>
+  );
+};
+
+export default function App() {
+  return (
+    <ToastProvider>
+      <DemoPanel />
+    </ToastProvider>
+  );
+}

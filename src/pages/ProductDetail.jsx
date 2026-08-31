@@ -1,6 +1,19 @@
 import React, { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { FaShoppingCart, FaHeart, FaMinus, FaPlus, FaUser, FaMapMarkerAlt, FaPhone, FaClock } from "react-icons/fa";
+import {
+  FaShoppingCart,
+  FaHeart,
+  FaMinus,
+  FaPlus,
+  FaUser,
+  FaMapMarkerAlt,
+  FaPhone,
+  FaClock,
+  FaChevronRight,
+  FaStore,
+  FaShieldAlt,
+  FaTruck,
+} from "react-icons/fa";
 import ProductService from "../services/productService";
 import CategoryService from "../services/categoryService";
 import { useCart } from "../context/CartContext";
@@ -8,7 +21,10 @@ import { useWishlist } from "../context/WishlistContext";
 import { formatPrice } from "../utils/helpers";
 
 const NAVY = "#00204E";
+const NAVY_DEEP = "#00152F";
 const GREEN = "#34A129";
+const GREEN_DEEP = "#278A1E";
+const GREEN_SOFT = "#EAF7E8";
 const FALLBACK_IMG =
   "https://images.unsplash.com/photo-1542838132-92c53300491e?w=600";
 
@@ -30,6 +46,7 @@ const ProductDetail = () => {
 
   useEffect(() => {
     loadProduct();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const loadProduct = async () => {
@@ -52,7 +69,9 @@ const ProductDetail = () => {
       return;
     }
     setRelatedLoading(true);
-    const result = await CategoryService.getProductsByCategory(currentProduct.category_id);
+    const result = await CategoryService.getProductsByCategory(
+      currentProduct.category_id,
+    );
     if (result.success) {
       const filtered = (result.data || []).filter(
         (p) => String(p.id) !== String(currentProduct.id),
@@ -77,16 +96,8 @@ const ProductDetail = () => {
 
   if (loading) {
     return (
-      <div className="container py-5">
-        <div className="text-center">
-          <div
-            className="spinner-border"
-            style={{ color: GREEN }}
-            role="status"
-          >
-            <span className="visually-hidden">Loading...</span>
-          </div>
-        </div>
+      <div className="pd-loading-screen">
+        <div className="pd-loading-spinner" />
       </div>
     );
   }
@@ -100,412 +111,485 @@ const ProductDetail = () => {
   const inWishlist = isInWishlist(product.id);
 
   return (
-    <div className="product-detail-page bg-light">
+    <div className="product-detail-page">
       <style>{`
-        .pd-wrap { padding-top: 1.75rem; padding-bottom: 3rem; }
-        .pd-breadcrumb a { color: #6c7a90; text-decoration: none; }
-        .pd-breadcrumb a:hover { color: ${NAVY}; }
-        .pd-breadcrumb .active { color: ${GREEN}; font-weight: 600; }
+        * { box-sizing: border-box; }
+        .product-detail-page { background: #f3f6fa; font-family: 'Poppins', sans-serif; min-height: 100vh; }
 
-        .pd-gallery-card, .pd-info-card { border: none; border-radius: 16px; box-shadow: 0 4px 16px rgba(0,32,78,0.08); }
+        .pd-loading-screen { min-height: 70vh; display: flex; align-items: center; justify-content: center; }
+        .pd-loading-spinner {
+          width: 42px; height: 42px; border-radius: 50%;
+          border: 4px solid ${GREEN_SOFT}; border-top-color: ${GREEN};
+          animation: pdSpin 0.8s linear infinite;
+        }
+        @keyframes pdSpin { to { transform: rotate(360deg); } }
+
+        .pd-wrap { max-width: 1180px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+
+        /* ---------- Breadcrumb ---------- */
+        .pd-breadcrumb {
+          display: flex; align-items: center; flex-wrap: wrap; gap: 0.35rem;
+          font-size: 0.82rem; margin-bottom: 1.25rem; color: #94a3b8;
+        }
+        .pd-breadcrumb a { color: #64748b; text-decoration: none; font-weight: 500; }
+        .pd-breadcrumb a:hover { color: ${GREEN_DEEP}; }
+        .pd-breadcrumb .pd-crumb-active { color: ${GREEN_DEEP}; font-weight: 700; }
+        .pd-breadcrumb svg { opacity: 0.5; }
+
+        /* ---------- Top grid ---------- */
+        .pd-top-grid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 1.25rem;
+          margin-bottom: 2.5rem;
+        }
+        @media (min-width: 992px) {
+          .pd-top-grid { grid-template-columns: 1fr 1fr; align-items: start; }
+        }
+
+        /* ---------- Gallery ---------- */
+        .pd-gallery-card {
+          background: #fff; border-radius: 18px;
+          box-shadow: 0 4px 20px rgba(0,32,78,0.06);
+          padding: 1.1rem;
+        }
+        @media (min-width: 992px) { .pd-gallery-card { position: sticky; top: 1rem; } }
 
         .pd-main-img-wrap {
-          aspect-ratio: 1 / 1; background: #f4f6f9; border-radius: 12px;
+          aspect-ratio: 1 / 1; background: #f6f8fb; border-radius: 14px;
           display: flex; align-items: center; justify-content: center; overflow: hidden;
+          margin-bottom: 0.85rem; position: relative;
         }
-        .pd-main-img-wrap img { width: 100%; height: 100%; object-fit: contain; padding: 1.25rem; }
+        .pd-main-img-wrap img { width: 100%; height: 100%; object-fit: contain; padding: 1.5rem; }
 
+        .pd-thumb-row { display: flex; gap: 0.6rem; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+        .pd-thumb-row::-webkit-scrollbar { display: none; }
         .pd-thumb {
-          aspect-ratio: 1 / 1; background: #f4f6f9; border-radius: 10px; overflow: hidden;
+          flex: 0 0 64px; width: 64px; height: 64px; background: #f6f8fb; border-radius: 10px; overflow: hidden;
           display: flex; align-items: center; justify-content: center; cursor: pointer;
-          border: 2px solid transparent; transition: border-color .15s ease;
+          border: 2px solid transparent; transition: border-color .15s ease, opacity .15s ease;
+          opacity: 0.65;
         }
-        .pd-thumb img { width: 100%; height: 100%; object-fit: contain; padding: 0.4rem; }
-        .pd-thumb.active { border-color: ${GREEN}; }
+        .pd-thumb img { width: 100%; height: 100%; object-fit: contain; padding: 0.35rem; }
+        .pd-thumb.active { border-color: ${GREEN}; opacity: 1; }
+
+        /* ---------- Info panel ---------- */
+        .pd-info-card { background: #fff; border-radius: 18px; box-shadow: 0 4px 20px rgba(0,32,78,0.06); padding: 1.5rem; }
 
         .pd-category-badge {
-          background: rgba(52,161,41,0.1); color: ${GREEN};
-          font-weight: 700; font-size: 0.75rem; padding: 0.4rem 0.85rem;
-          border-radius: 999px; display: inline-block; text-decoration: none;
+          background: ${GREEN_SOFT}; color: ${GREEN_DEEP};
+          font-weight: 700; font-size: 0.72rem; letter-spacing: 0.02em;
+          padding: 0.38rem 0.85rem; border-radius: 999px;
+          display: inline-block; text-decoration: none; text-transform: uppercase;
+          margin-bottom: 0.85rem; transition: background 0.15s ease;
         }
         .pd-category-badge:hover { background: ${GREEN}; color: #fff; }
 
-        .pd-name { color: ${NAVY}; font-weight: 800; }
-        .pd-price { color: ${GREEN}; font-weight: 800; }
+        .pd-name { color: ${NAVY}; font-weight: 800; font-size: 1.5rem; line-height: 1.3; margin: 0 0 0.65rem; }
 
-        .pd-qty-btn { border: 1px solid #dde3ec; background: #fff; color: ${NAVY}; }
-        .pd-qty-btn:disabled { opacity: 0.4; }
-        .pd-qty-input { border-top: 1px solid #dde3ec; border-bottom: 1px solid #dde3ec; font-weight: 700; color: ${NAVY}; }
+        .pd-price-row { display: flex; align-items: baseline; gap: 0.6rem; margin-bottom: 0.35rem; }
+        .pd-price { color: ${GREEN_DEEP}; font-weight: 800; font-size: 1.85rem; margin: 0; }
+        .pd-sku { color: #94a3b8; font-size: 0.78rem; margin-bottom: 1.1rem; }
 
-        .pd-btn-cta { background: ${GREEN}; border-color: ${GREEN}; font-weight: 700; }
-        .pd-btn-cta:hover { background: #2c8c22; border-color: #2c8c22; }
-        .pd-btn-wish { border-width: 2px; font-weight: 600; }
-        .pd-btn-wish.active { background: #dc3545; border-color: #dc3545; }
+        .pd-description {
+          color: #64748b; font-size: 0.9rem; line-height: 1.65;
+          padding: 0.9rem 1rem; background: #f8fafc; border-radius: 12px;
+          border-left: 3px solid ${GREEN}; margin-bottom: 1.35rem;
+        }
 
+        .pd-trust-row { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 1.35rem; }
+        .pd-trust-chip {
+          display: flex; align-items: center; gap: 0.4rem;
+          background: #f8fafc; color: ${NAVY}; font-size: 0.72rem; font-weight: 600;
+          padding: 0.4rem 0.7rem; border-radius: 8px;
+        }
+        .pd-trust-chip svg { color: ${GREEN}; }
+
+        /* ---------- Seller card ---------- */
+        .pd-vendor-card {
+          border-radius: 14px; padding: 1.1rem;
+          background: linear-gradient(135deg, #fbfcfe 0%, #f2f6fb 100%);
+          border: 1px solid #e7ecf3;
+          margin-bottom: 1.5rem;
+        }
+        .pd-vendor-title {
+          display: flex; align-items: center; gap: 0.4rem;
+          font-weight: 700; color: ${NAVY}; font-size: 0.72rem;
+          margin-bottom: 0.9rem; text-transform: uppercase; letter-spacing: 0.06em;
+        }
+        .pd-vendor-body { display: flex; align-items: flex-start; gap: 0.9rem; }
+        .pd-vendor-photo-wrap {
+          width: 56px; height: 56px; border-radius: 12px; overflow: hidden;
+          background: #f4f6f9; border: 1px solid #e7ecf3;
+          display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        }
+        .pd-vendor-photo-wrap img { width: 100%; height: 100%; object-fit: cover; }
+        .pd-vendor-name { font-weight: 700; color: ${NAVY}; font-size: 1rem; margin-bottom: 0.5rem; }
+        .pd-vendor-detail {
+          font-size: 0.8rem; color: #64748b; margin-bottom: 0.3rem;
+          display: flex; align-items: center; gap: 0.45rem;
+        }
+        .pd-vendor-detail svg { color: #9aa5b5; flex-shrink: 0; }
+        .pd-vendor-detail strong { color: ${NAVY}; font-weight: 600; }
+
+        /* ---------- Quantity stepper ---------- */
+        .pd-qty-label { font-weight: 700; color: ${NAVY}; font-size: 0.85rem; margin-bottom: 0.55rem; display: block; }
+        .pd-qty-stepper {
+          display: inline-flex; align-items: center; border: 1.5px solid #e2e8f0;
+          border-radius: 10px; overflow: hidden; margin-bottom: 1.4rem;
+        }
+        .pd-qty-btn {
+          width: 42px; height: 42px; border: none; background: #fff; color: ${NAVY};
+          display: flex; align-items: center; justify-content: center; cursor: pointer;
+          transition: background 0.15s ease;
+        }
+        .pd-qty-btn:hover:not(:disabled) { background: ${GREEN_SOFT}; color: ${GREEN_DEEP}; }
+        .pd-qty-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+        .pd-qty-value {
+          width: 46px; text-align: center; font-weight: 700; color: ${NAVY};
+          font-size: 0.95rem; border-left: 1.5px solid #e2e8f0; border-right: 1.5px solid #e2e8f0;
+          height: 42px; display: flex; align-items: center; justify-content: center;
+        }
+
+        /* ---------- CTAs ---------- */
+        .pd-desktop-actions { display: flex; flex-direction: column; gap: 0.65rem; }
+        .pd-btn-cta {
+          background: ${GREEN}; color: #fff; border: none; font-weight: 700;
+          border-radius: 12px; padding: 0.85rem 1.25rem; font-size: 0.95rem;
+          display: flex; align-items: center; justify-content: center; gap: 0.55rem;
+          cursor: pointer; transition: background 0.18s ease;
+        }
+        .pd-btn-cta:hover { background: ${GREEN_DEEP}; }
+        .pd-btn-wish {
+          background: #fff; border: 1.5px solid #f1c3ca; color: #dc3545; font-weight: 700;
+          border-radius: 12px; padding: 0.8rem 1.25rem; font-size: 0.9rem;
+          display: flex; align-items: center; justify-content: center; gap: 0.55rem;
+          cursor: pointer; transition: all 0.18s ease;
+        }
+        .pd-btn-wish:hover { background: #fff5f5; }
+        .pd-btn-wish.active { background: #dc3545; border-color: #dc3545; color: #fff; }
+
+        /* ---------- Mobile sticky bar ---------- */
         .pd-mobile-bar {
           position: fixed; left: 0; right: 0; bottom: 0; z-index: 1030;
           background: #fff; border-top: 1px solid #e7eaf0;
-          box-shadow: 0 -4px 16px rgba(0,32,78,0.1);
-          padding: 0.65rem 0.85rem; padding-bottom: max(0.65rem, env(safe-area-inset-bottom));
-          display: flex; align-items: center; gap: 0.6rem;
+          box-shadow: 0 -6px 20px rgba(0,32,78,0.1);
+          padding: 0.65rem 0.9rem; padding-bottom: max(0.65rem, env(safe-area-inset-bottom));
+          display: flex; align-items: center; gap: 0.65rem;
         }
-        .pd-mobile-price { color: ${GREEN}; font-weight: 800; font-size: 1.05rem; white-space: nowrap; }
+        .pd-mobile-price { color: ${GREEN_DEEP}; font-weight: 800; font-size: 1.05rem; white-space: nowrap; }
         .pd-mobile-wish {
-          width: 44px; height: 44px; border-radius: 10px; flex-shrink: 0;
-          border: 1.5px solid #dde3ec; background: #fff;
-          display: flex; align-items: center; justify-content: center;
+          width: 46px; height: 46px; border-radius: 12px; flex-shrink: 0;
+          border: 1.5px solid #e2e8f0; background: #fff;
+          display: flex; align-items: center; justify-content: center; cursor: pointer;
         }
         .pd-mobile-wish.active { border-color: #dc3545; background: #fff5f5; }
+        .pd-mobile-cta {
+          flex: 1; background: ${GREEN}; color: #fff; border: none; font-weight: 700;
+          border-radius: 12px; padding: 0.85rem; font-size: 0.9rem;
+          display: flex; align-items: center; justify-content: center; gap: 0.5rem; cursor: pointer;
+        }
 
-        .pd-related-heading { color: ${NAVY}; font-weight: 800; }
+        /* ---------- Related products ---------- */
+        .pd-related-section { margin-top: 1rem; }
+        .pd-related-header {
+          display: flex; align-items: center; justify-content: space-between;
+          margin-bottom: 1.15rem; flex-wrap: wrap; gap: 0.6rem;
+        }
+        .pd-related-heading { color: ${NAVY}; font-weight: 800; font-size: 1.15rem; margin: 0; display: flex; align-items: center; gap: 0.5rem; }
+        .pd-related-heading .dot { width: 7px; height: 7px; border-radius: 50%; background: ${GREEN}; }
+        .pd-viewall-link {
+          display: flex; align-items: center; gap: 0.35rem;
+          color: ${GREEN_DEEP}; font-weight: 700; font-size: 0.82rem;
+          text-decoration: none; border: 1.5px solid ${GREEN}; border-radius: 999px;
+          padding: 0.4rem 0.9rem; transition: background 0.15s ease;
+        }
+        .pd-viewall-link:hover { background: ${GREEN_SOFT}; }
+
+        .pd-related-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 0.85rem;
+          justify-content: start;
+        }
+        @media (min-width: 640px) { .pd-related-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+        @media (min-width: 992px) { .pd-related-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
         .pd-related-card {
-          border: none; border-radius: 14px; overflow: hidden; height: 100%;
-          box-shadow: 0 3px 12px rgba(0,32,78,0.08);
+          background: #fff; border-radius: 14px; overflow: hidden;
+          box-shadow: 0 3px 12px rgba(0,32,78,0.06);
           transition: transform .18s ease, box-shadow .18s ease;
+          display: flex; flex-direction: column;
         }
         .pd-related-card:hover { transform: translateY(-3px); box-shadow: 0 10px 22px rgba(0,32,78,0.14); }
         .pd-related-img-wrap {
-          aspect-ratio: 1 / 1; background: #f4f6f9;
+          aspect-ratio: 1 / 1; background: #f6f8fb;
           display: flex; align-items: center; justify-content: center; overflow: hidden;
         }
-        .pd-related-img-wrap img { width: 100%; height: 100%; object-fit: contain; padding: 0.7rem; }
+        .pd-related-img-wrap img { width: 100%; height: 100%; object-fit: contain; padding: 0.9rem; }
+        .pd-related-body { padding: 0.75rem 0.85rem 0.9rem; display: flex; flex-direction: column; flex: 1; }
         .pd-related-title {
-          color: ${NAVY}; font-weight: 600; font-size: 0.92rem;
+          color: ${NAVY}; font-weight: 600; font-size: 0.85rem; text-decoration: none;
           display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-          min-height: 2.4em;
+          min-height: 2.3em; margin-bottom: 0.5rem;
         }
-        .pd-related-title:hover { color: ${GREEN}; }
-        .pd-related-price { color: ${GREEN}; font-weight: 700; }
-        .pd-related-btn { background: ${GREEN}; border-color: ${GREEN}; font-weight: 600; }
-        .pd-related-btn:hover { background: #2c8c22; border-color: #2c8c22; }
+        .pd-related-title:hover { color: ${GREEN_DEEP}; }
+        .pd-related-price { color: ${GREEN_DEEP}; font-weight: 800; font-size: 0.95rem; margin-bottom: 0.65rem; }
+        .pd-related-btn {
+          background: ${GREEN}; color: #fff; border: none; font-weight: 700;
+          border-radius: 9px; padding: 0.5rem; font-size: 0.78rem; margin-top: auto;
+          display: flex; align-items: center; justify-content: center; gap: 0.4rem; cursor: pointer;
+          transition: background 0.15s ease;
+        }
+        .pd-related-btn:hover { background: ${GREEN_DEEP}; }
 
-        .pd-vendor-card {
-          border: 1px solid #dde3ec;
-          border-radius: 12px;
-          padding: 1.25rem;
-          background: #fdfdfd;
-          box-shadow: 0 2px 8px rgba(0,32,78,0.03);
+        .pd-related-empty {
+          background: #fff; border-radius: 14px; padding: 2rem; text-align: center;
+          color: #94a3b8; font-size: 0.88rem; box-shadow: 0 3px 12px rgba(0,32,78,0.05);
         }
-        .pd-vendor-title {
-          font-weight: 700;
-          color: ${NAVY};
-          font-size: 0.85rem;
-          margin-bottom: 0.75rem;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-        }
-        .pd-vendor-photo-wrap {
-          width: 70px;
-          height: 70px;
-          border-radius: 10px;
-          overflow: hidden;
-          background: #f4f6f9;
-          border: 1px solid #dde3ec;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
-        }
-        .pd-vendor-photo-wrap img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-        }
-        .pd-vendor-name {
-          font-weight: 700;
-          color: ${NAVY};
-          font-size: 1.1rem;
-          margin-bottom: 0.4rem;
-          text-transform: capitalize;
-        }
-        .pd-vendor-detail {
-          font-size: 0.85rem;
-          color: #6c7a90;
-          margin-bottom: 0.2rem;
-        }
-        .pd-vendor-detail strong {
-          color: ${NAVY};
-        }
+        .pd-related-loading { display: flex; justify-content: center; padding: 2rem; }
 
+        .pd-mobile-bar { display: flex; }
+        @media (min-width: 768px) {
+          .pd-mobile-bar { display: none; }
+        }
         @media (max-width: 767.98px) {
           .pd-desktop-actions { display: none; }
           .pd-page-bottom-pad { padding-bottom: 84px; }
         }
       `}</style>
 
-      <div className="container pd-wrap pd-page-bottom-pad">
+      <div className="pd-wrap pd-page-bottom-pad">
         {/* Breadcrumb */}
-        <nav aria-label="breadcrumb" className="pd-breadcrumb mb-3 mb-md-4">
-          <ol className="breadcrumb mb-0">
-            <li className="breadcrumb-item">
-              <Link to="/">Home</Link>
-            </li>
-            <li className="breadcrumb-item">
-              <Link to="/products">Products</Link>
-            </li>
-            <li className="breadcrumb-item active" aria-current="page">
-              {product.name}
-            </li>
-          </ol>
+        <nav aria-label="breadcrumb" className="pd-breadcrumb">
+          <Link to="/">Home</Link>
+          <FaChevronRight size={9} />
+          <Link to="/products">Products</Link>
+          <FaChevronRight size={9} />
+          <span className="pd-crumb-active">{product.name}</span>
         </nav>
 
-        <div className="row g-4 mb-5">
-          {/* Product Images */}
-          <div className="col-lg-6">
-            <div className="pd-gallery-card card">
-              <div className="card-body p-3">
-                <div className="pd-main-img-wrap mb-3">
-                  <img src={images[selectedImage]} alt={product.name} />
-                </div>
-
-                {images.length > 1 && (
-                  <div className="row g-2">
-                    {images.map((img, index) => (
-                      <div key={index} className="col-3">
-                        <div
-                          className={`pd-thumb ${selectedImage === index ? "active" : ""}`}
-                          onClick={() => setSelectedImage(index)}
-                        >
-                          <img src={img} alt={`${product.name} ${index + 1}`} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+        <div className="pd-top-grid">
+          {/* Gallery */}
+          <div className="pd-gallery-card">
+            <div className="pd-main-img-wrap">
+              <img src={images[selectedImage]} alt={product.name} />
             </div>
+
+            {images.length > 1 && (
+              <div className="pd-thumb-row">
+                {images.map((img, index) => (
+                  <div
+                    key={index}
+                    className={`pd-thumb ${selectedImage === index ? "active" : ""}`}
+                    onClick={() => setSelectedImage(index)}
+                  >
+                    <img src={img} alt={`${product.name} ${index + 1}`} />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Product Info */}
-          <div className="col-lg-6">
-            <div className="pd-info-card card h-100">
-              <div className="card-body p-4">
-                <h1 className="pd-name fs-3 mb-3">{product.name}</h1>
+          {/* Info */}
+          <div className="pd-info-card">
+            {product.category_name && (
+              <Link
+                to={`/categories/${product.category_id}`}
+                className="pd-category-badge"
+              >
+                {product.category_name}
+              </Link>
+            )}
 
-                {product.category_name && (
-                  <div className="mb-3">
-                    <Link
-                      to={`/categories/${product.category_id}`}
-                      className="pd-category-badge"
-                    >
-                      {product.category_name}
-                    </Link>
+            <h1 className="pd-name">{product.name}</h1>
+
+            <div className="pd-price-row">
+              <p className="pd-price">{formatPrice(product.price)}</p>
+            </div>
+            {product.sku && <p className="pd-sku">SKU: {product.sku}</p>}
+
+            <p className="pd-description">
+              {product.description || DEFAULT_DESCRIPTION}
+            </p>
+
+            <div className="pd-trust-row">
+              <div className="pd-trust-chip">
+                <FaTruck size={12} /> Fast delivery
+              </div>
+              <div className="pd-trust-chip">
+                <FaShieldAlt size={12} /> Quality checked
+              </div>
+            </div>
+
+            {product.store_name && (
+              <div className="pd-vendor-card">
+                <div className="pd-vendor-title">
+                  <FaStore size={12} /> Seller information
+                </div>
+                <div className="pd-vendor-body">
+                  <div className="pd-vendor-photo-wrap">
+                    <img
+                      src={product.store_photo_url || FALLBACK_IMG}
+                      alt={product.store_name}
+                    />
                   </div>
-                )}
-
-                <h2 className="pd-price fs-2 mb-3">
-                  {formatPrice(product.price)}
-                </h2>
-
-                {product.sku && (
-                  <p className="text-muted small mb-3">SKU: {product.sku}</p>
-                )}
-
-                <p className="text-muted mb-4">
-                  {product.description || DEFAULT_DESCRIPTION}
-                </p>
-
-                {product.store_name && (
-                  <div className="pd-vendor-card mb-4">
-                    <div className="pd-vendor-title">Seller Information</div>
-                    <div className="d-flex align-items-start gap-3">
-                      {product.store_photo_url && (
-                        <div className="pd-vendor-photo-wrap">
-                          <img
-                            src={product.store_photo_url}
-                            alt={product.store_name}
-                          />
+                  <div className="flex-grow-1">
+                    <div className="pd-vendor-name">{product.store_name}</div>
+                    {product.vendor_name && (
+                      <div className="pd-vendor-detail">
+                        <FaUser size={11} />
+                        <span>
+                          <strong>Merchant:</strong> {product.vendor_name}
+                        </span>
+                      </div>
+                    )}
+                    {product.store_contact && (
+                      <div className="pd-vendor-detail">
+                        <FaPhone size={11} />
+                        <span>
+                          <strong>Contact:</strong> {product.store_contact}
+                        </span>
+                      </div>
+                    )}
+                    {product.store_address && (
+                      <div className="pd-vendor-detail">
+                        <FaMapMarkerAlt size={11} />
+                        <span>
+                          <strong>Location:</strong> {product.store_address}
+                        </span>
+                      </div>
+                    )}
+                    {product.store_opening_time &&
+                      product.store_closing_time && (
+                        <div className="pd-vendor-detail">
+                          <FaClock size={11} />
+                          <span>
+                            <strong>Hours:</strong>{" "}
+                            {product.store_opening_time.substring(0, 5)} -{" "}
+                            {product.store_closing_time.substring(0, 5)}
+                          </span>
                         </div>
                       )}
-                      <div className="flex-grow-1">
-                        <div className="pd-vendor-name">{product.store_name}</div>
-                        {product.vendor_name && (
-                          <div className="pd-vendor-detail d-flex align-items-center gap-2">
-                            <FaUser size={12} className="text-muted" />
-                            <span><strong>Merchant:</strong> {product.vendor_name}</span>
-                          </div>
-                        )}
-                        {product.store_contact && (
-                          <div className="pd-vendor-detail d-flex align-items-center gap-2">
-                            <FaPhone size={12} className="text-muted" />
-                            <span><strong>Contact:</strong> {product.store_contact}</span>
-                          </div>
-                        )}
-                        {product.store_address && (
-                          <div className="pd-vendor-detail d-flex align-items-center gap-2">
-                            <FaMapMarkerAlt size={12} className="text-muted" />
-                            <span><strong>Location:</strong> {product.store_address}</span>
-                          </div>
-                        )}
-                        {product.store_opening_time && product.store_closing_time && (
-                          <div className="pd-vendor-detail d-flex align-items-center gap-2">
-                            <FaClock size={12} className="text-muted" />
-                            <span>
-                              <strong>Hours:</strong> {product.store_opening_time.substring(0, 5)} - {product.store_closing_time.substring(0, 5)}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
                   </div>
-                )}
-
-                <div className="mb-4">
-                  <label className="form-label fw-bold" style={{ color: NAVY }}>
-                    Quantity
-                  </label>
-                  <div
-                    className="d-flex align-items-stretch"
-                    style={{ maxWidth: "150px" }}
-                  >
-                    <button
-                      className="pd-qty-btn rounded-start"
-                      style={{ width: "40px" }}
-                      onClick={() => handleQuantityChange(-1)}
-                      disabled={quantity <= 1}
-                      aria-label="Decrease quantity"
-                    >
-                      <FaMinus size={12} />
-                    </button>
-                    <input
-                      type="text"
-                      className="pd-qty-input form-control text-center px-1"
-                      value={quantity}
-                      readOnly
-                    />
-                    <button
-                      className="pd-qty-btn rounded-end"
-                      style={{ width: "40px" }}
-                      onClick={() => handleQuantityChange(1)}
-                      disabled={quantity >= 99}
-                      aria-label="Increase quantity"
-                    >
-                      <FaPlus size={12} />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Desktop / tablet actions */}
-                <div className="pd-desktop-actions d-grid gap-2">
-                  <button
-                    className="btn pd-btn-cta btn-lg text-white"
-                    onClick={handleAddToCart}
-                  >
-                    <FaShoppingCart className="me-2" />
-                    Add to Cart
-                  </button>
-                  <button
-                    className={`btn pd-btn-wish ${inWishlist ? "active text-white" : "btn-outline-danger"}`}
-                    onClick={() => toggleWishlist(product)}
-                  >
-                    <FaHeart className="me-2" />
-                    {inWishlist ? "Remove from Wishlist" : "Add to Wishlist"}
-                  </button>
                 </div>
               </div>
+            )}
+
+            <label className="pd-qty-label">Quantity</label>
+            <div className="pd-qty-stepper">
+              <button
+                className="pd-qty-btn"
+                onClick={() => handleQuantityChange(-1)}
+                disabled={quantity <= 1}
+                aria-label="Decrease quantity"
+              >
+                <FaMinus size={11} />
+              </button>
+              <div className="pd-qty-value">{quantity}</div>
+              <button
+                className="pd-qty-btn"
+                onClick={() => handleQuantityChange(1)}
+                disabled={quantity >= 99}
+                aria-label="Increase quantity"
+              >
+                <FaPlus size={11} />
+              </button>
+            </div>
+
+            {/* Desktop / tablet actions */}
+            <div className="pd-desktop-actions">
+              <button className="pd-btn-cta" onClick={handleAddToCart}>
+                <FaShoppingCart size={14} />
+                Add to Cart
+              </button>
+              <button
+                className={`pd-btn-wish ${inWishlist ? "active" : ""}`}
+                onClick={() => toggleWishlist(product)}
+              >
+                <FaHeart size={14} />
+                {inWishlist ? "Remove from Wishlist" : "Add to Wishlist"}
+              </button>
             </div>
           </div>
         </div>
 
         {/* More Products from this Category */}
         {product.category_id && (
-          <div className="row">
-            <div className="col-12">
-              <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-                <h4 className="pd-related-heading mb-0">
-                  {product.category_name
-                    ? `More from ${product.category_name}`
-                    : "More Products"}
-                </h4>
-                <Link
-                  to={`/categories/${product.category_id}`}
-                  className="btn btn-outline-primary btn-sm"
-                >
-                  View All
-                </Link>
-              </div>
-
-              {relatedLoading ? (
-                <div className="text-center py-4">
-                  <div
-                    className="spinner-border"
-                    style={{ color: GREEN }}
-                    role="status"
-                  >
-                    <span className="visually-hidden">Loading...</span>
-                  </div>
-                </div>
-              ) : relatedProducts.length === 0 ? (
-                <p className="text-muted">
-                  No other products found in this category.
-                </p>
-              ) : (
-                <div className="row g-3 g-md-4">
-                  {relatedProducts.map((relatedProduct) => (
-                    <div
-                      key={relatedProduct.id}
-                      className="col-6 col-md-4 col-lg-3"
-                    >
-                      <div className="pd-related-card card">
-                        <div className="pd-related-img-wrap">
-                          <Link to={`/product/${relatedProduct.id}`}>
-                            <img
-                              src={relatedProduct.image_url || FALLBACK_IMG}
-                              alt={relatedProduct.name}
-                              loading="lazy"
-                            />
-                          </Link>
-                        </div>
-
-                        <div className="card-body pb-2">
-                          <Link
-                            to={`/product/${relatedProduct.id}`}
-                            className="text-decoration-none pd-related-title d-block mb-1"
-                          >
-                            {relatedProduct.name}
-                          </Link>
-                          <span className="pd-related-price fs-6">
-                            {formatPrice(relatedProduct.price)}
-                          </span>
-                        </div>
-
-                        <div className="card-footer bg-white border-0 pt-0">
-                          <button
-                            className="btn pd-related-btn text-white w-100 btn-sm"
-                            onClick={() => addToCart(relatedProduct)}
-                          >
-                            <FaShoppingCart className="me-2" size={13} /> Add to
-                            Cart
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+          <div className="pd-related-section">
+            <div className="pd-related-header">
+              <h4 className="pd-related-heading">
+                <span className="dot" />
+                {product.category_name
+                  ? `More from ${product.category_name}`
+                  : "More Products"}
+              </h4>
+              <Link
+                to={`/categories/${product.category_id}`}
+                className="pd-viewall-link"
+              >
+                View all <FaChevronRight size={10} />
+              </Link>
             </div>
+
+            {relatedLoading ? (
+              <div className="pd-related-loading">
+                <div className="pd-loading-spinner" />
+              </div>
+            ) : relatedProducts.length === 0 ? (
+              <div className="pd-related-empty">
+                No other products found in this category yet.
+              </div>
+            ) : (
+              <div className="pd-related-grid">
+                {relatedProducts.map((relatedProduct) => (
+                  <div key={relatedProduct.id} className="pd-related-card">
+                    <div className="pd-related-img-wrap">
+                      <Link to={`/product/${relatedProduct.id}`}>
+                        <img
+                          src={relatedProduct.image_url || FALLBACK_IMG}
+                          alt={relatedProduct.name}
+                          loading="lazy"
+                        />
+                      </Link>
+                    </div>
+                    <div className="pd-related-body">
+                      <Link
+                        to={`/product/${relatedProduct.id}`}
+                        className="pd-related-title"
+                      >
+                        {relatedProduct.name}
+                      </Link>
+                      <span className="pd-related-price">
+                        {formatPrice(relatedProduct.price)}
+                      </span>
+                      <button
+                        className="pd-related-btn"
+                        onClick={() => addToCart(relatedProduct)}
+                      >
+                        <FaShoppingCart size={12} /> Add to Cart
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
 
       {/* Mobile sticky action bar */}
-      <div className="pd-mobile-bar d-md-none">
+      <div className="pd-mobile-bar">
         <button
           className={`pd-mobile-wish ${inWishlist ? "active" : ""}`}
           onClick={() => toggleWishlist(product)}
           aria-label={inWishlist ? "Remove from wishlist" : "Add to wishlist"}
         >
-          <FaHeart
-            size={18}
-            className={inWishlist ? "text-danger" : "text-muted"}
-          />
+          <FaHeart size={17} color={inWishlist ? "#dc3545" : "#94a3b8"} />
         </button>
         <span className="pd-mobile-price">{formatPrice(product.price)}</span>
-        <button
-          className="btn pd-btn-cta text-white flex-grow-1"
-          onClick={handleAddToCart}
-        >
-          <FaShoppingCart className="me-2" size={14} />
+        <button className="pd-mobile-cta" onClick={handleAddToCart}>
+          <FaShoppingCart size={14} />
           Add to Cart
         </button>
       </div>

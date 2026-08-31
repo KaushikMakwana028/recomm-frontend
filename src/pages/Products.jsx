@@ -47,10 +47,11 @@ const Products = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [selectedCategoryId, setSelectedCategoryId] = useState(
-    searchParams.get("category_id") || null,
-  );
-  const [selectedPriceRange, setSelectedPriceRange] = useState(null);
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState(() => {
+    const ids = searchParams.getAll("category_id");
+    return ids.length > 0 ? ids.map(String) : [];
+  });
+  const [selectedPriceRangeIds, setSelectedPriceRangeIds] = useState([]);
 
   const [searchInput, setSearchInput] = useState(
     searchParams.get("search") || "",
@@ -104,25 +105,25 @@ const Products = () => {
     return () => clearTimeout(searchDebounceRef.current);
   }, [searchInput]);
 
+  // Sync category selection with URL search parameters
+  useEffect(() => {
+    const ids = searchParams.getAll("category_id");
+    setSelectedCategoryIds(ids.length > 0 ? ids.map(String) : []);
+  }, [searchParams]);
+
   useEffect(() => {
     loadProducts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCategoryId, searchQuery]);
+  }, [searchQuery]);
 
   const loadProducts = async () => {
     setLoading(true);
     setError("");
 
-    const result = selectedCategoryId
-      ? await CategoryService.getProductsByCategory(selectedCategoryId)
-      : await ProductService.getProductList({ search: searchQuery });
+    const result = await ProductService.getProductList({ search: searchQuery });
 
     if (result.success) {
       let data = result.data || [];
-      if (selectedCategoryId && searchQuery) {
-        const q = searchQuery.toLowerCase();
-        data = data.filter((p) => p.name?.toLowerCase().includes(q));
-      }
       setRawProducts(data);
     } else {
       setError(result.error || "Failed to load products");
@@ -132,20 +133,36 @@ const Products = () => {
   };
 
   const handleCategoryChange = (categoryId) => {
-    setSelectedCategoryId(categoryId);
-    const params = {};
-    if (categoryId) params.category_id = categoryId;
-    if (searchQuery) params.search = searchQuery;
-    setSearchParams(params);
+    let nextIds;
+    if (categoryId === null) {
+      nextIds = [];
+    } else {
+      const idStr = String(categoryId);
+      if (selectedCategoryIds.includes(idStr)) {
+        nextIds = selectedCategoryIds.filter((id) => id !== idStr);
+      } else {
+        nextIds = [...selectedCategoryIds, idStr];
+      }
+    }
+    setSelectedCategoryIds(nextIds);
+
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete("category_id");
+    nextIds.forEach((id) => newParams.append("category_id", id));
+    setSearchParams(newParams);
   };
 
   const handlePriceChange = (range) => {
-    setSelectedPriceRange((prev) => (prev?.id === range.id ? null : range));
+    setSelectedPriceRangeIds((prev) =>
+      prev.includes(range.id)
+        ? prev.filter((id) => id !== range.id)
+        : [...prev, range.id]
+    );
   };
 
   const handleClearFilters = () => {
-    setSelectedCategoryId(null);
-    setSelectedPriceRange(null);
+    setSelectedCategoryIds([]);
+    setSelectedPriceRangeIds([]);
     setSearchInput("");
     setSearchQuery("");
     setSearchParams({});
@@ -153,9 +170,22 @@ const Products = () => {
 
   const filteredProducts = rawProducts
     .filter((p) => {
-      if (!selectedPriceRange) return true;
-      const price = parseFloat(p.price);
-      return price >= selectedPriceRange.min && price < selectedPriceRange.max;
+      // Category filter
+      if (selectedCategoryIds.length > 0) {
+        if (!selectedCategoryIds.includes(String(p.category_id))) {
+          return false;
+        }
+      }
+      // Price filter
+      if (selectedPriceRangeIds.length > 0) {
+        const price = parseFloat(p.price);
+        const matchesPrice = PRICE_RANGES.some((range) => {
+          if (!selectedPriceRangeIds.includes(range.id)) return false;
+          return price >= range.min && price < range.max;
+        });
+        if (!matchesPrice) return false;
+      }
+      return true;
     })
     .sort((a, b) => {
       switch (sortBy) {
@@ -170,24 +200,29 @@ const Products = () => {
       }
     });
 
-  const activeCategoryName = categories.find(
-    (c) => String(c.id) === String(selectedCategoryId),
-  )?.name;
   const activeFilterCount =
-    (selectedCategoryId ? 1 : 0) + (selectedPriceRange ? 1 : 0);
+    selectedCategoryIds.length + selectedPriceRangeIds.length;
   const hasActiveFilters = activeFilterCount > 0 || searchQuery;
 
   const activeFilterChips = [
-    activeCategoryName && {
-      key: "category",
-      label: activeCategoryName,
-      onClear: () => handleCategoryChange(null),
-    },
-    selectedPriceRange && {
-      key: "price",
-      label: selectedPriceRange.label,
-      onClear: () => setSelectedPriceRange(null),
-    },
+    ...selectedCategoryIds.map((id) => {
+      const cat = categories.find((c) => String(c.id) === String(id));
+      if (!cat) return null;
+      return {
+        key: `category-${id}`,
+        label: cat.name,
+        onClear: () => handleCategoryChange(id),
+      };
+    }),
+    ...selectedPriceRangeIds.map((id) => {
+      const range = PRICE_RANGES.find((r) => r.id === id);
+      if (!range) return null;
+      return {
+        key: `price-${id}`,
+        label: range.label,
+        onClear: () => handlePriceChange(range),
+      };
+    }),
     searchQuery && {
       key: "search",
       label: `"${searchQuery}"`,
@@ -327,11 +362,12 @@ const Products = () => {
         }
         .pr-drawer-opt:hover { background: #f8f9fc; }
         .pr-drawer-opt.active { color: ${GREEN}; }
-        .pr-drawer-opt .pr-check-circle {
-          width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid #d7dee9; flex-shrink: 0;
-          display: flex; align-items: center; justify-content: center; color: #fff; font-size: 0.6rem;
+        .pr-drawer-opt .pr-check-box {
+          width: 20px; height: 20px; border-radius: 4px; border: 1.5px solid #d7dee9; flex-shrink: 0;
+          display: flex; align-items: center; justify-content: center; color: #fff; font-size: 0.65rem;
+          transition: all 0.15s ease;
         }
-        .pr-drawer-opt.active .pr-check-circle { background: ${GREEN}; border-color: ${GREEN}; }
+        .pr-drawer-opt.active .pr-check-box { background: ${GREEN}; border-color: ${GREEN}; }
 
         .pr-drawer-foot {
           display: flex; gap: 0.7rem; padding: 0.9rem 1.1rem; border-top: 1px solid #eef1f6; flex-shrink: 0;
@@ -678,6 +714,11 @@ const Products = () => {
                   onClick={() => setFilterTab("categories")}
                 >
                   Categories
+                  {selectedCategoryIds.length > 0 && (
+                    <span className="pr-tab-count">
+                      {selectedCategoryIds.length}
+                    </span>
+                  )}
                   <FaChevronRight size={10} />
                 </button>
                 <button
@@ -685,8 +726,10 @@ const Products = () => {
                   onClick={() => setFilterTab("price")}
                 >
                   Price
-                  {selectedPriceRange && (
-                    <span className="pr-tab-count">1</span>
+                  {selectedPriceRangeIds.length > 0 && (
+                    <span className="pr-tab-count">
+                      {selectedPriceRangeIds.length}
+                    </span>
                   )}
                   <FaChevronRight size={10} style={{ marginLeft: "auto" }} />
                 </button>
@@ -696,17 +739,16 @@ const Products = () => {
                 {filterTab === "categories" ? (
                   <>
                     <button
-                      className={`pr-drawer-opt ${!selectedCategoryId ? "active" : ""}`}
+                      className={`pr-drawer-opt ${selectedCategoryIds.length === 0 ? "active" : ""}`}
                       onClick={() => handleCategoryChange(null)}
                     >
                       All Products
-                      <span className="pr-check-circle">
-                        {!selectedCategoryId && <FaCheck />}
+                      <span className="pr-check-box">
+                        {selectedCategoryIds.length === 0 && <FaCheck />}
                       </span>
                     </button>
                     {categories.map((category) => {
-                      const active =
-                        String(selectedCategoryId) === String(category.id);
+                      const active = selectedCategoryIds.includes(String(category.id));
                       return (
                         <button
                           key={category.id}
@@ -714,7 +756,7 @@ const Products = () => {
                           onClick={() => handleCategoryChange(category.id)}
                         >
                           {category.name}
-                          <span className="pr-check-circle">
+                          <span className="pr-check-box">
                             {active && <FaCheck />}
                           </span>
                         </button>
@@ -723,7 +765,7 @@ const Products = () => {
                   </>
                 ) : (
                   PRICE_RANGES.map((range) => {
-                    const active = selectedPriceRange?.id === range.id;
+                    const active = selectedPriceRangeIds.includes(range.id);
                     return (
                       <button
                         key={range.id}
@@ -731,7 +773,7 @@ const Products = () => {
                         onClick={() => handlePriceChange(range)}
                       >
                         {range.label}
-                        <span className="pr-check-circle">
+                        <span className="pr-check-box">
                           {active && <FaCheck />}
                         </span>
                       </button>

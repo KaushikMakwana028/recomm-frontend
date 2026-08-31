@@ -109,11 +109,11 @@ const AuthService = {
      HOME
   =========================================================== */
 
-  getHomeData: async ({ search, categoryId } = {}) => {
-    const params = {};
-
-    if (search) params.search = search;
-    if (categoryId) params.category_id = categoryId;
+  getHomeData: async ({ search = "", categoryId = "" } = {}) => {
+    const params = {
+      search,
+      category_id: categoryId,
+    };
 
     return call(
       axiosInstance.get("/home", {

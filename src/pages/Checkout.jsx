@@ -40,7 +40,7 @@ const Checkout = () => {
       return;
     }
     if (!isAuthenticated) {
-      navigate("/login?redirect=checkout");
+      navigate("/login?redirect=/checkout");
       return;
     }
     loadAddresses();

@@ -157,7 +157,7 @@ export const WishlistProvider = ({ children }) => {
   };
 
   const isInWishlist = (productId) =>
-    wishlistItems.some((item) => item.id === productId);
+    wishlistItems.some((item) => String(item.id) === String(productId));
 
   const toggleWishlist = (product) => {
     if (isInWishlist(product.id)) {

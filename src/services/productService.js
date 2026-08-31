@@ -1,10 +1,10 @@
 import { axiosInstance, call } from "../api/apiHelper";
 
 const ProductService = {
-  getProductList: async ({ search } = {}) => {
-    const params = {};
-
-    if (search) params.search = search;
+  getProductList: async ({ search = "" } = {}) => {
+    const params = {
+      search,
+    };
 
     return call(
       axiosInstance.get("/get_product_list", {
@@ -15,6 +15,41 @@ const ProductService = {
 
   getProductDetail: async (id) => {
     return call(axiosInstance.get(`/get_product_detail/${id}`));
+  },
+
+  getProductById: async (id) => {
+    return call(axiosInstance.get(`/get_product_detail/${id}`));
+  },
+
+  getFeaturedProducts: async (limit = 6) => {
+    // Since get_featured_products is a 404, we can fetch from the /home endpoint which returns featured products.
+    const res = await call(
+      axiosInstance.get("/home", {
+        params: { search: "", category_id: "" },
+      }),
+    );
+    if (res.success && res.data && res.data.products) {
+      return {
+        success: true,
+        data: res.data.products.slice(0, limit),
+        error: null,
+      };
+    }
+    return res;
+  },
+
+  getRelatedProducts: async (productId, limit = 4) => {
+    // Fallback: get all products and return those that don't match the current ID
+    const res = await ProductService.getProductList();
+    if (res.success && Array.isArray(res.data)) {
+      const filtered = res.data.filter((p) => String(p.id) !== String(productId));
+      return {
+        success: true,
+        data: filtered.slice(0, limit),
+        error: null,
+      };
+    }
+    return res;
   },
 
   searchProducts: async ({ search, categoryId, brand, minPrice, maxPrice, inStock, vendorId, sortBy, page, limit } = {}) => {
