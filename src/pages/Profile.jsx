@@ -14,8 +14,11 @@ import {
   FaSignOutAlt,
   FaCamera,
   FaChevronRight,
+  FaFilePdf,
+  FaBolt,
 } from "react-icons/fa";
 import ProfileService from "../services/profileService";
+import OrderService from "../services/orderService";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
 import { useOrder } from "../context/OrderContext";
@@ -670,32 +673,116 @@ const Profile = () => {
                             </tr>
                           </thead>
                           <tbody>
-                            {orders.map((order) => (
-                              <tr key={order.id}>
-                                <td
-                                  className="fw-bold"
+                              {orders.map((order) => (
+                                <tr key={order.id}>
+                                  <td
+                                    className="fw-bold"
+                                    style={{ color: "var(--pf-navy)" }}
+                                  >
+                                    #
+                                    {order.order_number ||
+                                      String(order.id).slice(0, 8)}
+                                    {order.delivery_type === "urgent" && (
+                                      <span
+                                        className="ms-2 badge bg-danger-subtle text-danger border border-danger-subtle d-inline-flex align-items-center"
+                                        style={{ fontSize: "0.68rem" }}
+                                      >
+                                        <FaBolt size={9} className="me-1" /> Urgent
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td>{formatDate(order.createdAt)}</td>
+                                  <td>{order.items?.length || order.total_items || 1} items</td>
+                                  <td
+                                    className="fw-bold"
+                                    style={{ color: "var(--pf-green-dark)" }}
+                                  >
+                                    {formatPrice(order.pricing?.total)}
+                                  </td>
+                                  <td>
+                                    <span
+                                      className={`pf-badge ${statusBadgeClass(order.status)}`}
+                                    >
+                                      {formatStatus(order.status)}
+                                    </span>
+                                  </td>
+                                  <td>
+                                    <div className="d-flex align-items-center gap-2">
+                                      <Link
+                                        to="/order-confirmation"
+                                        state={{ order }}
+                                        className="pf-btn pf-btn--outline pf-btn--sm"
+                                      >
+                                        View
+                                      </Link>
+                                      {order.status?.toLowerCase() === "delivered" ? (
+                                        <a
+                                          href={
+                                            order.invoice_url ||
+                                            OrderService.getInvoiceUrl(order.order_id || order.id)
+                                          }
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="pf-btn pf-btn--bill-pdf pf-btn--sm"
+                                          title="View / Print PDF Bill"
+                                        >
+                                          <FaFilePdf size={11} /> Bill
+                                        </a>
+                                      ) : (
+                                        <span
+                                          className="pf-btn pf-btn--bill-locked pf-btn--sm"
+                                          title="Bill available once delivered"
+                                        >
+                                          <FaLock size={9} /> Bill
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Mobile stacked cards */}
+                        <div className="d-md-none p-3">
+                          {orders.map((order) => (
+                            <div className="pf-order-card" key={order.id}>
+                              <div className="pf-order-card-top">
+                                <span
+                                  className="fw-bold d-flex align-items-center gap-1"
                                   style={{ color: "var(--pf-navy)" }}
                                 >
                                   #
                                   {order.order_number ||
                                     String(order.id).slice(0, 8)}
-                                </td>
-                                <td>{formatDate(order.createdAt)}</td>
-                                <td>{order.items?.length} items</td>
-                                <td
+                                  {order.delivery_type === "urgent" && (
+                                    <span
+                                      className="badge bg-danger-subtle text-danger border border-danger-subtle d-inline-flex align-items-center"
+                                      style={{ fontSize: "0.62rem" }}
+                                    >
+                                      <FaBolt size={8} className="me-1" /> Urgent
+                                    </span>
+                                  )}
+                                </span>
+                                <span
+                                  className={`pf-badge ${statusBadgeClass(order.status)}`}
+                                >
+                                  {formatStatus(order.status)}
+                                </span>
+                              </div>
+                              <div className="pf-order-card-meta">
+                                <span>{formatDate(order.createdAt)}</span>
+                                <span>{order.items?.length || order.total_items || 1} items</span>
+                              </div>
+                              <div className="pf-order-card-footer">
+                                <span
                                   className="fw-bold"
                                   style={{ color: "var(--pf-green-dark)" }}
                                 >
                                   {formatPrice(order.pricing?.total)}
-                                </td>
-                                <td>
-                                  <span
-                                    className={`pf-badge ${statusBadgeClass(order.status)}`}
-                                  >
-                                    {formatStatus(order.status)}
-                                  </span>
-                                </td>
-                                <td>
+                                </span>
+                                <div className="d-flex align-items-center gap-2">
                                   <Link
                                     to="/order-confirmation"
                                     state={{ order }}
@@ -703,54 +790,32 @@ const Profile = () => {
                                   >
                                     View
                                   </Link>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-
-                      {/* Mobile stacked cards */}
-                      <div className="d-md-none p-3">
-                        {orders.map((order) => (
-                          <div className="pf-order-card" key={order.id}>
-                            <div className="pf-order-card-top">
-                              <span
-                                className="fw-bold"
-                                style={{ color: "var(--pf-navy)" }}
-                              >
-                                #
-                                {order.order_number ||
-                                  String(order.id).slice(0, 8)}
-                              </span>
-                              <span
-                                className={`pf-badge ${statusBadgeClass(order.status)}`}
-                              >
-                                {formatStatus(order.status)}
-                              </span>
+                                  {order.status?.toLowerCase() === "delivered" ? (
+                                    <a
+                                      href={
+                                        order.invoice_url ||
+                                        OrderService.getInvoiceUrl(order.order_id || order.id)
+                                      }
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="pf-btn pf-btn--bill-pdf pf-btn--sm"
+                                      title="View / Print PDF Bill"
+                                    >
+                                      <FaFilePdf size={11} /> Bill
+                                    </a>
+                                  ) : (
+                                    <span
+                                      className="pf-btn pf-btn--bill-locked pf-btn--sm"
+                                      title="Bill available once delivered"
+                                    >
+                                      <FaLock size={9} /> Bill
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
                             </div>
-                            <div className="pf-order-card-meta">
-                              <span>{formatDate(order.createdAt)}</span>
-                              <span>{order.items?.length} items</span>
-                            </div>
-                            <div className="pf-order-card-footer">
-                              <span
-                                className="fw-bold"
-                                style={{ color: "var(--pf-green-dark)" }}
-                              >
-                                {formatPrice(order.pricing?.total)}
-                              </span>
-                              <Link
-                                to="/order-confirmation"
-                                state={{ order }}
-                                className="pf-btn pf-btn--outline pf-btn--sm"
-                              >
-                                View
-                              </Link>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                          ))}
+                        </div>
                     </>
                   )}
                 </div>

@@ -421,6 +421,10 @@
 }
 
 /* ---------- action buttons ---------- */
+.oc-actions-wrapper {
+    margin-top: 4px;
+}
+
 .oc-actions {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
@@ -479,6 +483,189 @@
 .oc-btn--solid:hover {
     color: #fff;
     box-shadow: 0 10px 22px rgba(29, 163, 78, 0.4);
+}
+
+/* Enhanced Bill Button & PDF Actions */
+.oc-bill-btn-group {
+    display: flex;
+    align-items: stretch;
+    position: relative;
+    width: 100%;
+}
+
+.oc-btn--bill {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 13px 14px;
+    border-radius: var(--oc-radius-md);
+    font-weight: 700;
+    font-size: 0.92rem;
+    transition: all 0.2s ease;
+    border: 1.5px solid transparent;
+    text-decoration: none;
+}
+
+.oc-btn--bill-disabled {
+    background: #f1f5f9;
+    color: #94a3b8;
+    border-color: #cbd5e1;
+    cursor: not-allowed;
+    opacity: 0.85;
+    box-shadow: none !important;
+    transform: none !important;
+}
+
+.oc-btn--bill-disabled:hover {
+    transform: none !important;
+    background: #f1f5f9;
+    color: #94a3b8;
+}
+
+.oc-btn--bill-disabled .oc-lock-icon {
+    color: #94a3b8;
+}
+
+.oc-btn--bill-active {
+    background: linear-gradient(135deg, #00204E 0%, #0c3e7f 100%);
+    color: #fff;
+    border-color: #00204E;
+    box-shadow: 0 4px 14px rgba(0, 32, 78, 0.25);
+    cursor: pointer;
+}
+
+.oc-btn--bill-active:hover {
+    background: linear-gradient(135deg, #001637 0%, #00204E 100%);
+    color: #fff;
+    box-shadow: 0 6px 20px rgba(0, 32, 78, 0.35);
+    transform: translateY(-2px);
+}
+
+.oc-btn--bill-active .oc-bill-icon {
+    color: #4ade80;
+    font-size: 1.05rem;
+}
+
+.oc-bill-download-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 0 10px;
+    margin-left: 6px;
+    background: #eef8f1;
+    color: var(--oc-green-dark);
+    border: 1.5px solid #bbf7d0;
+    border-radius: var(--oc-radius-md);
+    font-weight: 700;
+    font-size: 0.8rem;
+    text-decoration: none;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.oc-bill-download-btn:hover {
+    background: var(--oc-green);
+    color: #fff;
+    border-color: var(--oc-green);
+    transform: translateY(-1px);
+}
+
+.oc-bill-status-alert {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 16px;
+    border-radius: 10px;
+    font-size: 0.82rem;
+    margin-top: 14px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    color: #64748b;
+    line-height: 1.45;
+}
+
+.oc-bill-status-alert strong {
+    color: #334155;
+}
+
+.oc-bill-status-alert--ready {
+    background: #f0fdf4;
+    border-color: #bbf7d0;
+    color: #166534;
+}
+
+.oc-bill-status-alert--ready strong {
+    color: #166534;
+}
+
+.oc-bill-status-icon {
+    flex-shrink: 0;
+    color: #94a3b8;
+    font-size: 1.05rem;
+}
+
+/* Delivery tags & badges */
+.oc-urgent-tag {
+    display: inline-flex;
+    align-items: center;
+    background: #fef2f2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 0.76rem;
+    letter-spacing: 0.02em;
+}
+
+.oc-normal-tag {
+    display: inline-flex;
+    align-items: center;
+    background: #f0fdf4;
+    color: #166534;
+    border: 1px solid #bbf7d0;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.76rem;
+}
+
+.oc-pay-status-pill {
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 12px;
+    letter-spacing: 0.5px;
+    display: inline-block;
+}
+
+.oc-pay-status-pill--paid {
+    background: #dcfce7;
+    color: #15803d;
+    border: 1px solid #86efac;
+}
+
+.oc-pay-status-pill--pending {
+    background: #fef9c3;
+    color: #a16207;
+    border: 1px solid #fde047;
+}
+
+.oc-pay-status-pill--failed {
+    background: #fee2e2;
+    color: #b91c1c;
+    border: 1px solid #fca5a5;
+}
+
+.oc-urgent-surcharge-row {
+    background: #fff5f5;
+    border-radius: 6px;
+    padding: 6px 10px !important;
+    margin: 4px 0;
+    border: 1px dashed #fecaca;
 }
 
 /* ==========================================================================

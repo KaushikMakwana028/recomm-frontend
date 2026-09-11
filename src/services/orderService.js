@@ -41,6 +41,23 @@ const OrderService = {
       axiosInstance.post("/cancel_order", { order_id: orderId, reason }),
     );
   },
+
+  /**
+   * Get invoice view URL (PDF)
+   */
+  getInvoiceUrl: (orderId, explicitUrl) => {
+    if (explicitUrl) return explicitUrl;
+    const base = axiosInstance.defaults?.baseURL || "http://localhost/kaushik/recomm/api/user";
+    return `${base.replace(/\/+$/, "")}/order_invoice/${orderId}`;
+  },
+
+  /**
+   * Get invoice direct download URL (PDF)
+   */
+  getInvoiceDownloadUrl: (orderId, explicitUrl) => {
+    const url = OrderService.getInvoiceUrl(orderId, explicitUrl);
+    return url.includes("?") ? `${url}&download=1` : `${url}?download=1`;
+  },
 };
 
 export default OrderService;

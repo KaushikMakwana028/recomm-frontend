@@ -7,13 +7,18 @@ import {
   FaEnvelope,
   FaHome,
   FaShoppingBag,
-  FaPrint,
   FaRegCopy,
   FaCheck,
+  FaFilePdf,
+  FaDownload,
+  FaLock,
+  FaBolt,
+  FaInfoCircle,
 } from "react-icons/fa";
 import { formatPrice, formatDate, getImageUrl, formatStatus } from "../utils/helpers";
 import { useOrder } from "../context/OrderContext";
 import { useProducts } from "../context/ProductContext";
+import OrderService from "../services/orderService";
 import "../styles/OrderConfirmation.css";
 
 const STATUS_STEPS = [
@@ -109,8 +114,15 @@ const OrderConfirmation = () => {
   const order = {
     ...orderData,
     id: orderData.order_number || orderData.id || orderData.order_id,
+    rawOrderId: orderData.order_id || orderData.id,
     createdAt: orderData.created_at || orderData.createdAt,
     status: orderData.status,
+    deliveryType: orderData.delivery_type || (orderData.delivery === "urgent" ? "urgent" : "normal"),
+    deliveryOption: orderData.delivery_option,
+    distance: orderData.distance,
+    paymentStatus: orderData.payment_status,
+    invoiceUrl: orderData.invoice_url,
+    canDownloadInvoice: orderData.can_download_invoice,
     shipping:
       orderData.shipping ||
       (orderData.delivery_address
@@ -161,6 +173,41 @@ const OrderConfirmation = () => {
           category: item.category || productMatch?.category_name || "",
         };
       }) || [],
+  };
+
+  // Determine delivery and invoice logic
+  const isUrgent =
+    order.deliveryType === "urgent" ||
+    orderData.delivery_type === "urgent" ||
+    order.delivery === "urgent";
+
+  const isDelivered =
+    String(order.status || orderData.status || "").toLowerCase().trim() === "delivered";
+
+  const urgentCharge = isUrgent ? 50 : 0;
+  const rawDeliveryCharge =
+    parseFloat(order.pricing?.shipping ?? orderData.delivery_charge ?? 0) || 0;
+  const baseDeliveryCharge =
+    isUrgent && rawDeliveryCharge >= 50
+      ? rawDeliveryCharge - 50
+      : rawDeliveryCharge;
+
+  const invoiceViewUrl =
+    order.invoiceUrl ||
+    OrderService.getInvoiceUrl(order.rawOrderId || order.id);
+
+  const invoiceDownloadUrl = OrderService.getInvoiceDownloadUrl(
+    order.rawOrderId || order.id,
+    order.invoiceUrl,
+  );
+
+  const handlePrintBill = () => {
+    if (!isDelivered) return;
+    if (invoiceViewUrl) {
+      window.open(invoiceViewUrl, "_blank");
+    } else {
+      window.print();
+    }
   };
 
   // Calculate active step index based on backend order status
@@ -304,35 +351,62 @@ const OrderConfirmation = () => {
                   <div className="oc-detail-box">
                     <div className="oc-detail-row">
                       <span className="oc-label">Payment</span>
-                      <span className="oc-value">
-                        {orderData.payment_method === "cod" ||
-                        order.payment?.last4 === "COD"
-                          ? "Cash on Delivery"
-                          : `Card ••${order.payment?.last4 || "xxxx"}`}
+                      <span className="oc-value d-flex align-items-center justify-content-end gap-2 flex-wrap">
+                        <span>
+                          {orderData.payment_method === "cod" ||
+                          order.payment?.last4 === "COD"
+                            ? "Cash on Delivery"
+                            : `Card ••${order.payment?.last4 || "xxxx"}`}
+                        </span>
+                        {order.paymentStatus && (
+                          <span
+                            className={`oc-pay-status-pill oc-pay-status-pill--${String(order.paymentStatus).toLowerCase()}`}
+                          >
+                            {String(order.paymentStatus).toUpperCase()}
+                          </span>
+                        )}
                       </span>
                     </div>
+
                     <div className="oc-detail-row">
-                      <span className="oc-label">Delivery</span>
+                      <span className="oc-label">Delivery Type</span>
                       <span className="oc-value">
-                        {order.delivery === "urgent"
-                          ? "Urgent (Within 24 Hours)"
-                          : order.delivery === "normal"
-                            ? "Normal (3-5 Business Days)"
-                            : order.delivery === "standard"
-                              ? "Standard (5-7 days)"
-                              : order.delivery === "express"
-                                ? "Express (2-3 days)"
-                                : "Next Day"}
+                        {isUrgent ? (
+                          <span className="oc-urgent-tag">
+                            <FaBolt size={10} className="me-1" />
+                            Urgent (Within 24 Hours)
+                          </span>
+                        ) : (
+                          <span className="oc-normal-tag">
+                            Normal (3-5 Business Days)
+                          </span>
+                        )}
                       </span>
                     </div>
-                     <div className="oc-detail-row">
-                       <span className="oc-label">Status</span>
-                       <span className="oc-value">
-                         <span className={`oc-status-pill oc-status-pill--${String(order.status || "").toLowerCase().replace(/\s+/g, "_")}`}>
-                           {formatStatus(order.status)}
-                         </span>
-                       </span>
-                     </div>
+
+                    {(order.deliveryOption || order.distance) && (
+                      <div className="oc-detail-row">
+                        <span className="oc-label">Delivery Mode</span>
+                        <span className="oc-value">
+                          {order.deliveryOption === "self"
+                            ? "By Self"
+                            : "Delivery Partner"}
+                          {order.distance ? ` (${order.distance} KM)` : ""}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="oc-detail-row">
+                      <span className="oc-label">Status</span>
+                      <span className="oc-value">
+                        <span
+                          className={`oc-status-pill oc-status-pill--${String(order.status || "").toLowerCase().replace(/\s+/g, "_")}`}
+                        >
+                          {formatStatus(order.status)}
+                        </span>
+                      </span>
+                    </div>
+
                     <div className="oc-detail-row">
                       <span className="oc-label">Date</span>
                       <span className="oc-value">
@@ -426,15 +500,27 @@ const OrderConfirmation = () => {
                     <span>{formatPrice(order.pricing?.subtotal)}</span>
                   </div>
                   <div className="oc-summary-row">
-                    <span className="oc-label">Shipping</span>
+                    <span className="oc-label">
+                      Shipping {order.distance ? `(${order.distance} KM)` : ""}
+                    </span>
                     <span>
-                      {order.pricing?.shipping === 0 ? (
+                      {baseDeliveryCharge === 0 ? (
                         <span style={{ color: "var(--oc-green)" }}>FREE</span>
                       ) : (
-                        formatPrice(order.pricing?.shipping)
+                        formatPrice(baseDeliveryCharge)
                       )}
                     </span>
                   </div>
+                  {isUrgent && (
+                    <div className="oc-summary-row oc-urgent-surcharge-row">
+                      <span className="oc-label text-danger fw-semibold">
+                        <FaBolt size={11} className="me-1" /> Urgent Delivery Surcharge
+                      </span>
+                      <span className="text-danger fw-bold">
+                        +{formatPrice(urgentCharge)}
+                      </span>
+                    </div>
+                  )}
                   <div className="oc-summary-row">
                     <span className="oc-label">Tax</span>
                     <span>{formatPrice(order.pricing?.tax)}</span>
@@ -450,22 +536,65 @@ const OrderConfirmation = () => {
             </div>
 
             {/* Action Buttons */}
-            <div className="oc-actions">
-              <button
-                type="button"
-                className="oc-btn oc-btn--ghost"
-                onClick={() => window.print()}
-              >
-                <FaPrint /> Print Receipt
-              </button>
+            <div className="oc-actions-wrapper">
+              <div className="oc-actions">
+                <div className="oc-bill-btn-group">
+                  <button
+                    type="button"
+                    className={`oc-btn oc-btn--bill ${isDelivered ? "oc-btn--bill-active" : "oc-btn--bill-disabled"}`}
+                    onClick={handlePrintBill}
+                    disabled={!isDelivered}
+                    aria-disabled={!isDelivered}
+                    title={
+                      isDelivered
+                        ? "View and Print Official PDF Bill"
+                        : "Bill will be available once product is delivered"
+                    }
+                  >
+                    {isDelivered ? (
+                      <FaFilePdf size={15} className="oc-bill-icon" />
+                    ) : (
+                      <FaLock size={13} className="oc-bill-icon oc-lock-icon" />
+                    )}
+                    <span>Print Bill</span>
+                  </button>
 
-              <Link to="/profile?tab=orders" className="oc-btn oc-btn--outline">
-                <FaShoppingBag /> Track Order
-              </Link>
+                  {isDelivered && (
+                    <a
+                      href={invoiceDownloadUrl}
+                      download={`Invoice_${order.id}.pdf`}
+                      className="oc-bill-download-btn"
+                      title="Download PDF Invoice directly"
+                    >
+                      <FaDownload size={11} /> PDF
+                    </a>
+                  )}
+                </div>
 
-              <Link to="/" className="oc-btn oc-btn--solid">
-                <FaHome /> Back to Home
-              </Link>
+                <Link to="/profile?tab=orders" className="oc-btn oc-btn--outline">
+                  <FaShoppingBag /> Track Order
+                </Link>
+
+                <Link to="/" className="oc-btn oc-btn--solid">
+                  <FaHome /> Back to Home
+                </Link>
+              </div>
+
+              {!isDelivered ? (
+                <div className="oc-bill-status-alert">
+                  <FaInfoCircle className="oc-bill-status-icon" />
+                  <span>
+                    Official Bill (PDF) will be enabled for download &amp; printing once this order is <strong>Delivered</strong>.
+                  </span>
+                </div>
+              ) : (
+                <div className="oc-bill-status-alert oc-bill-status-alert--ready">
+                  <FaCheckCircle className="text-success me-2" />
+                  <span>
+                    Your tax invoice &amp; bill is ready! Click <strong>Print Bill</strong> to view/print or <strong>PDF</strong> to download.
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>
