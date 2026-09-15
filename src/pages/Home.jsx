@@ -28,6 +28,26 @@ const Home = () => {
 
   useEffect(() => {
     loadHomeData();
+
+    // Request customer's current live location on every visit
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const liveLocation = {
+            latitude: parseFloat(position.coords.latitude.toFixed(8)),
+            longitude: parseFloat(position.coords.longitude.toFixed(8)),
+            accuracy: position.coords.accuracy,
+            timestamp: Date.now(),
+          };
+          localStorage.setItem("customer_live_location", JSON.stringify(liveLocation));
+        },
+        (err) => {
+          // Graceful fallback if permission is denied or location is unavailable
+          console.debug("Live location notice:", err.message);
+        },
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+      );
+    }
   }, []);
 
   const loadHomeData = async () => {

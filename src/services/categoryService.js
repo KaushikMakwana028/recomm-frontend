@@ -9,8 +9,11 @@ const CategoryService = {
     return call(axiosInstance.get(`/get_category_detail/${id}`));
   },
 
-  getProductsByCategory: async (categoryId) => {
-    return call(axiosInstance.get(`/get_products_by_category/${categoryId}`));
+  getProductsByCategory: async (categoryId, { latitude, longitude } = {}) => {
+    const params = {};
+    if (latitude !== undefined) params.latitude = latitude;
+    if (longitude !== undefined) params.longitude = longitude;
+    return call(axiosInstance.get(`/get_products_by_category/${categoryId}`, { params }));
   },
 
   searchCategories: async ({ search, parentId, isActive, sortBy, page, limit } = {}) => {

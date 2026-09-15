@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const axiosInstance = axios.create({
-    baseURL: 'http://localhost/kaushik/recomm/api/user',
+    baseURL: 'https://admin.recomm.in/api/user',
     headers: {
         'Content-Type': 'application/json'
     },
@@ -12,6 +12,26 @@ axiosInstance.interceptors.request.use((config) => {
     if (token) {
         config.headers.Authorization = `Bearer ${token}`;
     }
+
+    // Attach customer live location coordinates if available in storage
+    try {
+        const rawLoc = localStorage.getItem('customer_live_location');
+        if (rawLoc) {
+            const parsed = JSON.parse(rawLoc);
+            if (parsed && typeof parsed.latitude === 'number' && typeof parsed.longitude === 'number') {
+                config.params = config.params || {};
+                if (config.params.latitude === undefined && config.params.lat === undefined) {
+                    config.params.latitude = parsed.latitude;
+                }
+                if (config.params.longitude === undefined && config.params.lon === undefined && config.params.lng === undefined) {
+                    config.params.longitude = parsed.longitude;
+                }
+            }
+        }
+    } catch (e) {
+        // ignore
+    }
+
     return config;
 });
 

@@ -1,10 +1,17 @@
 import { axiosInstance, call } from "../api/apiHelper";
 
 const ProductService = {
-  getProductList: async ({ search = "" } = {}) => {
+  getProductList: async ({ search = "", latitude, longitude, categoryId, brand, sortBy, page, limit } = {}) => {
     const params = {
       search,
     };
+    if (latitude !== undefined) params.latitude = latitude;
+    if (longitude !== undefined) params.longitude = longitude;
+    if (categoryId !== undefined) params.category_id = categoryId;
+    if (brand !== undefined) params.brand = brand;
+    if (sortBy !== undefined) params.sort_by = sortBy;
+    if (page !== undefined) params.page = page;
+    if (limit !== undefined) params.limit = limit;
 
     return call(
       axiosInstance.get("/get_product_list", {
@@ -13,12 +20,15 @@ const ProductService = {
     );
   },
 
-  getProductDetail: async (id) => {
-    return call(axiosInstance.get(`/get_product_detail/${id}`));
+  getProductDetail: async (id, { latitude, longitude } = {}) => {
+    const params = {};
+    if (latitude !== undefined) params.latitude = latitude;
+    if (longitude !== undefined) params.longitude = longitude;
+    return call(axiosInstance.get(`/get_product_detail/${id}`, { params }));
   },
 
-  getProductById: async (id) => {
-    return call(axiosInstance.get(`/get_product_detail/${id}`));
+  getProductById: async (id, coords) => {
+    return ProductService.getProductDetail(id, coords);
   },
 
   getFeaturedProducts: async (limit = 6) => {
@@ -52,7 +62,7 @@ const ProductService = {
     return res;
   },
 
-  searchProducts: async ({ search, categoryId, brand, minPrice, maxPrice, inStock, vendorId, sortBy, page, limit } = {}) => {
+  searchProducts: async ({ search, categoryId, brand, minPrice, maxPrice, inStock, vendorId, sortBy, page, limit, latitude, longitude } = {}) => {
     const params = {};
     if (search) params.search = search;
     if (categoryId) params.category_id = categoryId;
@@ -64,6 +74,8 @@ const ProductService = {
     if (sortBy) params.sort_by = sortBy;
     if (page) params.page = page;
     if (limit) params.limit = limit;
+    if (latitude !== undefined) params.latitude = latitude;
+    if (longitude !== undefined) params.longitude = longitude;
     return call(axiosInstance.get("/search_products", { params }));
   },
 };

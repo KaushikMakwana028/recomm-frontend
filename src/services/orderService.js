@@ -2,9 +2,29 @@ import { axiosInstance, call } from "../api/apiHelper";
 
 const OrderService = {
   /**
+   * Calculate live delivery charge from server using coordinates
+   */
+  calculateDeliveryCharge: async ({ addressId, deliveryType = "normal" } = {}) => {
+    return call(
+      axiosInstance.post("/calculate_delivery_charge", {
+        address_id: addressId,
+        delivery_type: deliveryType,
+      })
+    );
+  },
+
+  /**
    * Place a COD order using a saved address
    */
-  placeOrder: async ({ addressId, notes, deliveryCharge = 0, deliveryType = "normal", distance = null }) => {
+  placeOrder: async ({
+    addressId,
+    notes,
+    deliveryCharge = 0,
+    deliveryType = "normal",
+    distance = null,
+    chosenTimeOption = "immediately",
+    customDeliveryTime = null,
+  }) => {
     return call(
       axiosInstance.post("/place_order", {
         address_id: addressId,
@@ -13,6 +33,8 @@ const OrderService = {
         delivery_charge: deliveryCharge,
         delivery_type: deliveryType,
         distance: distance,
+        chosen_time_option: chosenTimeOption,
+        custom_delivery_time: customDeliveryTime,
       }),
     );
   },
@@ -47,7 +69,7 @@ const OrderService = {
    */
   getInvoiceUrl: (orderId, explicitUrl) => {
     if (explicitUrl) return explicitUrl;
-    const base = axiosInstance.defaults?.baseURL || "http://localhost/kaushik/recomm/api/user";
+    const base = axiosInstance.defaults?.baseURL || "https://admin.recomm.in/api/user";
     return `${base.replace(/\/+$/, "")}/order_invoice/${orderId}`;
   },
 

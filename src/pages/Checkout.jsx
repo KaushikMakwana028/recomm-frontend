@@ -6,13 +6,14 @@ import {
   FaMapMarkerAlt,
   FaMoneyBillWave,
   FaPlus,
+  FaClock,
 } from "react-icons/fa";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { useOrder } from "../context/OrderContext";
 import { useToast } from "../context/ToastContext";
 import ProfileService from "../services/profileService";
-import ProductService from "../services/productService";
+import OrderService from "../services/orderService";
 import { formatPrice } from "../utils/helpers";
 import "../styles/Checkout.css";
 
@@ -57,100 +58,58 @@ const Checkout = () => {
     setAddressLoading(false);
   };
 
-  const [vendorPincode, setVendorPincode] = useState("");
   const [distance, setDistance] = useState(null);
   const [distanceLoading, setDistanceLoading] = useState(false);
+  const [serverDeliveryCharge, setServerDeliveryCharge] = useState(null);
+  const [availableSlots, setAvailableSlots] = useState([]);
+  const [chosenTimeOption, setChosenTimeOption] = useState("immediately");
+  const [customDeliveryTime, setCustomDeliveryTime] = useState("");
 
   useEffect(() => {
-    if (cartItems.length > 0) {
-      const fetchVendorPincode = async () => {
+    if (selectedAddressId) {
+      const fetchDeliveryEstimate = async () => {
+        setDistanceLoading(true);
         try {
-          const firstItem = cartItems[0];
-          const result = await ProductService.getProductDetail(firstItem.id);
-          if (result.success && result.data) {
-            const address = result.data.store_address || "";
-            const match = address.match(/\b\d{6}\b/);
-            if (match) {
-              setVendorPincode(match[0]);
-            } else {
-              setVendorPincode("382330"); // Fallback to database vendor pincode
+          const res = await OrderService.calculateDeliveryCharge({
+            addressId: selectedAddressId,
+            deliveryType,
+          });
+          if (res.success && res.data) {
+            const dist = res.data.distance_km ?? res.data.distance;
+            setDistance(dist !== null && dist !== undefined ? parseFloat(dist) : 0);
+            if (res.data.total_delivery_charge !== undefined) {
+              setServerDeliveryCharge(parseFloat(res.data.total_delivery_charge));
+            }
+            if (res.data.slots && Array.isArray(res.data.slots)) {
+              setAvailableSlots(res.data.slots);
+              // Ensure chosenTimeOption exists in the active slots
+              if (res.data.slots.length > 0) {
+                const hasCurrent = res.data.slots.some(
+                  (s) => (s.id || s.option) === chosenTimeOption,
+                );
+                if (!hasCurrent) {
+                  setChosenTimeOption(res.data.slots[0].id || res.data.slots[0].option);
+                }
+              }
             }
           }
-        } catch (e) {
-          console.error("Failed to fetch vendor pincode", e);
-          setVendorPincode("382330"); // Fallback
+        } catch (err) {
+          console.error("Server delivery charge calculation error:", err);
+        } finally {
+          setDistanceLoading(false);
         }
       };
-      fetchVendorPincode();
+      fetchDeliveryEstimate();
     }
-  }, [cartItems]);
-
-  const calculateDistance = async (vendorPin, customerPin) => {
-    if (!vendorPin || !customerPin) return;
-    setDistanceLoading(true);
-    try {
-      // 1. Fetch vendor coordinates
-      const vendorUrl = `https://nominatim.openstreetmap.org/search?postalcode=${vendorPin}&country=India&format=json`;
-      const vendorRes = await fetch(vendorUrl, {
-        headers: { "Accept": "application/json" }
-      });
-      if (!vendorRes.ok) throw new Error("Failed to reach geocoding service");
-      const vendorData = await vendorRes.json();
-      if (!vendorData || vendorData.length === 0) throw new Error("Vendor coords not found");
-      const vendorCoords = {
-        lat: parseFloat(vendorData[0].lat),
-        lon: parseFloat(vendorData[0].lon)
-      };
-
-      // 2. Fetch customer coordinates
-      const customerUrl = `https://nominatim.openstreetmap.org/search?postalcode=${customerPin}&country=India&format=json`;
-      const customerRes = await fetch(customerUrl, {
-        headers: { "Accept": "application/json" }
-      });
-      if (!customerRes.ok) throw new Error("Failed to reach geocoding service");
-      const customerData = await customerRes.json();
-      if (!customerData || customerData.length === 0) throw new Error("Customer coords not found");
-      const customerCoords = {
-        lat: parseFloat(customerData[0].lat),
-        lon: parseFloat(customerData[0].lon)
-      };
-
-      // 3. Haversine distance
-      const R = 6371; // Earth's radius in KM
-      const dLat = (customerCoords.lat - vendorCoords.lat) * Math.PI / 180;
-      const dLon = (customerCoords.lon - vendorCoords.lon) * Math.PI / 180;
-      const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(vendorCoords.lat * Math.PI / 180) * Math.cos(customerCoords.lat * Math.PI / 180) *
-        Math.sin(dLon / 2) * Math.sin(dLon / 2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      const rawDistance = R * c;
-
-      // Approximate road distance (scale straight-line by 1.3)
-      const approximatedDistance = Math.round(rawDistance * 1.3 * 10) / 10;
-      setDistance(approximatedDistance);
-    } catch (err) {
-      console.error("Distance calculation failed:", err);
-      // Fallback distance e.g. 5 KM if APIs fail
-      setDistance(5);
-    } finally {
-      setDistanceLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (selectedAddressId && addresses.length > 0 && vendorPincode) {
-      const addr = addresses.find((a) => a.id === selectedAddressId);
-      if (addr && addr.pincode) {
-        calculateDistance(vendorPincode, addr.pincode);
-      }
-    }
-  }, [selectedAddressId, addresses, vendorPincode]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedAddressId, deliveryType]);
 
   const baseCharge = distance !== null ? Math.round(distance * 10) : 0;
   const normalCharge = baseCharge;
   const urgentCharge = baseCharge + 50;
-  const deliveryCharge = deliveryType === "urgent" ? urgentCharge : normalCharge;
+  const deliveryCharge = serverDeliveryCharge !== null
+    ? serverDeliveryCharge
+    : (deliveryType === "urgent" ? urgentCharge : normalCharge);
   const finalTotal = cartTotal + deliveryCharge;
 
   const renderDeliveryOptionCard = () => (
@@ -211,6 +170,146 @@ const Checkout = () => {
     </div>
   );
 
+  const renderDeliveryTimeSlotCard = () => {
+    // Default fallback slots if server hasn't returned them yet
+    const slots =
+      availableSlots.length > 0
+        ? availableSlots
+        : [
+            {
+              id: "immediately",
+              title: "Immediately",
+              subtitle: "Deliver ASAP (Prep + travel time)",
+              formatted_window: "Fastest dispatch",
+            },
+            {
+              id: "later",
+              title: "Later (After 3–4 Hours)",
+              subtitle: "Scheduled delivery after 3 to 4 hours",
+              formatted_window: "In 3–4 hours",
+            },
+            {
+              id: "lunch",
+              title: "Lunch Delivery",
+              subtitle: "Delivered during store lunch window",
+              formatted_window: "12:00 PM – 02:00 PM",
+            },
+            {
+              id: "dinner",
+              title: "Dinner Delivery",
+              subtitle: "Delivered during store dinner window",
+              formatted_window: "07:00 PM – 09:00 PM",
+            },
+            {
+              id: "custom",
+              title: "Custom Date & Time",
+              subtitle: "Specify your preferred time",
+              formatted_window: "Choose time below",
+            },
+          ];
+
+    return (
+      <div className="ck-card mb-3">
+        <div
+          className="ck-card-header ck-card-header--plain"
+          style={{ borderLeft: "4px solid #00204E" }}
+        >
+          <div className="d-flex align-items-center gap-2">
+            <FaClock style={{ color: "#00204E" }} />
+            <span className="font-weight-bold" style={{ color: "#00204E" }}>
+              Delivery Time Slot
+            </span>
+          </div>
+        </div>
+        <div className="ck-card-body">
+          <p className="text-muted small mb-3">
+            Choose your preferred delivery window. Our system calculates realistic times based on vendor prep time and distance.
+          </p>
+          <div className="d-flex flex-column gap-2">
+            {slots.map((slot) => {
+              const slotId = slot.id || slot.option;
+              const isSelected = chosenTimeOption === slotId;
+              return (
+                <div
+                  key={slotId}
+                  onClick={() => setChosenTimeOption(slotId)}
+                  className={`p-3 border rounded-3 d-flex flex-column gap-1 ${isSelected ? "border-primary bg-light" : ""}`}
+                  style={{
+                    cursor: "pointer",
+                    transition: "all 0.2s",
+                    borderWidth: isSelected ? "2px" : "1px",
+                    borderColor: isSelected ? "#00204E" : "#dee2e6",
+                    backgroundColor: isSelected ? "rgba(0, 32, 78, 0.04)" : "#fff",
+                  }}
+                >
+                  <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                    <div className="d-flex align-items-center gap-3">
+                      <input
+                        type="radio"
+                        name="chosenTimeOption"
+                        value={slotId}
+                        checked={isSelected}
+                        onChange={() => setChosenTimeOption(slotId)}
+                        style={{
+                          accentColor: "#00204E",
+                          width: "18px",
+                          height: "18px",
+                          cursor: "pointer",
+                        }}
+                      />
+                      <div>
+                        <strong
+                          className="text-dark d-block"
+                          style={{ fontSize: "0.95rem" }}
+                        >
+                          {slot.title ||
+                            slotId.charAt(0).toUpperCase() + slotId.slice(1)}
+                        </strong>
+                        <span className="text-muted small">{slot.subtitle}</span>
+                      </div>
+                    </div>
+                    {slot.formatted_window && (
+                      <span
+                        className="badge px-2 py-1 rounded-pill"
+                        style={{
+                          backgroundColor: isSelected ? "#e6f4ea" : "#f1f3f4",
+                          color: isSelected ? "#137333" : "#5f6368",
+                          fontSize: "0.78rem",
+                          fontWeight: 600,
+                        }}
+                      >
+                        🕒 {slot.formatted_window}
+                      </span>
+                    )}
+                  </div>
+
+                  {slotId === "custom" && isSelected && (
+                    <div
+                      className="mt-2 pt-2 border-top"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <label className="small text-muted mb-1 fw-semibold">
+                        Select Delivery Date &amp; Time:
+                      </label>
+                      <input
+                        type="datetime-local"
+                        className="form-control form-control-sm"
+                        value={customDeliveryTime}
+                        onChange={(e) => setCustomDeliveryTime(e.target.value)}
+                        min={new Date().toISOString().slice(0, 16)}
+                        style={{ maxWidth: "280px" }}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const handleContinueToReview = () => {
     if (!selectedAddressId) {
       setError("Please select a delivery address.");
@@ -222,6 +321,11 @@ const Checkout = () => {
   };
 
   const handlePlaceOrder = async () => {
+    if (chosenTimeOption === "custom" && !customDeliveryTime) {
+      setError("Please select your preferred custom delivery date and time.");
+      return;
+    }
+
     setLoading(true);
     setError("");
 
@@ -231,6 +335,9 @@ const Checkout = () => {
       deliveryCharge,
       deliveryType,
       distance,
+      chosenTimeOption,
+      customDeliveryTime:
+        chosenTimeOption === "custom" ? customDeliveryTime : null,
     });
 
     if (result.success) {
@@ -241,7 +348,7 @@ const Checkout = () => {
         buttonText: "View Order Details",
         onConfirm: () => {
           navigate("/order-confirmation", { state: { order: result.data } });
-        }
+        },
       });
     } else {
       setError(result.error || "Failed to place order. Please try again.");
@@ -446,6 +553,8 @@ const Checkout = () => {
 
                 {renderDeliveryOptionCard()}
 
+                {renderDeliveryTimeSlotCard()}
+
                 <div className="ck-card mb-3">
                   <div className="ck-card-header ck-card-header--plain">
                     <span>
@@ -530,6 +639,12 @@ const Checkout = () => {
                   <span className="ck-label font-weight-bold" style={{ color: "#00204E", margin: 0 }}>Delivery Mode</span>
                   <span className="text-capitalize font-weight-bold badge text-white" style={{ backgroundColor: deliveryType === "urgent" ? "#dc3545" : "#00204E", padding: "4px 8px", borderRadius: "4px" }}>
                     {deliveryType}
+                  </span>
+                </div>
+                <div className="ck-summary-row align-items-center" style={{ background: "#f8f9fa", padding: "6px 10px", borderRadius: "6px", margin: "6px 0" }}>
+                  <span className="ck-label font-weight-bold" style={{ color: "#00204E", margin: 0 }}>Delivery Slot</span>
+                  <span className="text-capitalize font-weight-bold badge" style={{ backgroundColor: "#00204E", color: "#fff", padding: "4px 8px", borderRadius: "4px" }}>
+                    {chosenTimeOption}
                   </span>
                 </div>
                 <div className="ck-summary-row">

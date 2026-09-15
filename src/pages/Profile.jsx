@@ -24,6 +24,7 @@ import { useCart } from "../context/CartContext";
 import { useOrder } from "../context/OrderContext";
 import { useToast } from "../context/ToastContext";
 import { formatPrice, formatDate, formatStatus } from "../utils/helpers";
+import LocationPicker from "../components/LocationPicker";
 import "../styles/Profile.css";
 
 const Profile = () => {
@@ -54,6 +55,7 @@ const Profile = () => {
 
   const [orders, setOrders] = useState([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
+  const [orderStatusFilter, setOrderStatusFilter] = useState("all");
   const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
@@ -86,7 +88,8 @@ const Profile = () => {
   useEffect(() => {
     if (activeTab === "orders" && isAuthenticated) {
       setOrdersLoading(true);
-      fetchOrders()
+      const statusParam = orderStatusFilter === "all" ? "" : orderStatusFilter;
+      fetchOrders({ status: statusParam })
         .then((result) => {
           if (result && result.success) {
             const apiOrders = (result.data?.orders || []).map((o) => ({
@@ -107,7 +110,7 @@ const Profile = () => {
           setOrdersLoading(false);
         });
     }
-  }, [activeTab, isAuthenticated, fetchOrders]);
+  }, [activeTab, isAuthenticated, fetchOrders, orderStatusFilter]);
 
   const [addresses, setAddresses] = useState([]);
   const [addressLoading, setAddressLoading] = useState(false);
@@ -121,6 +124,8 @@ const Profile = () => {
     city: "",
     state: "",
     pincode: "",
+    latitude: null,
+    longitude: null,
     country: "India",
     is_default: false,
   });
@@ -151,6 +156,8 @@ const Profile = () => {
       city: "",
       state: "",
       pincode: "",
+      latitude: null,
+      longitude: null,
       country: "India",
       is_default: addresses.length === 0, // first address defaults to true
     });
@@ -172,6 +179,8 @@ const Profile = () => {
       city: addr.city || "",
       state: addr.state || "",
       pincode: addr.pincode || "",
+      latitude: addr.latitude !== undefined && addr.latitude !== null ? addr.latitude : null,
+      longitude: addr.longitude !== undefined && addr.longitude !== null ? addr.longitude : null,
       country: addr.country || "India",
       is_default: !!addr.is_default,
     });
@@ -626,11 +635,41 @@ const Profile = () => {
             {/* Orders Tab */}
             {activeTab === "orders" && (
               <div className="pf-card overflow-hidden">
-                <div className="pf-section-header">
-                  <h5>
+                <div className="pf-section-header d-flex flex-wrap align-items-center justify-content-between gap-3">
+                  <h5 className="mb-0">
                     <FaShoppingBag className="me-2" />
                     Order History ({orders.length})
                   </h5>
+                  <div className="d-flex flex-wrap gap-2 align-items-center">
+                    {[
+                      { key: "all", label: "All" },
+                      { key: "pending", label: "Order Placed" },
+                      { key: "confirmed", label: "Confirmed" },
+                      { key: "packed", label: "Packed" },
+                      { key: "out_for_delivery", label: "Out for Delivery" },
+                      { key: "delivered", label: "Delivered" },
+                      { key: "cancelled", label: "Cancelled" },
+                    ].map((st) => (
+                      <button
+                        key={st.key}
+                        type="button"
+                        onClick={() => setOrderStatusFilter(st.key)}
+                        style={{
+                          fontSize: "0.75rem",
+                          fontWeight: 600,
+                          padding: "4px 12px",
+                          borderRadius: "999px",
+                          border: orderStatusFilter === st.key ? "1.5px solid var(--pf-green)" : "1.5px solid var(--pf-border)",
+                          background: orderStatusFilter === st.key ? "var(--pf-green-soft)" : "#fff",
+                          color: orderStatusFilter === st.key ? "var(--pf-green-dark)" : "var(--pf-muted)",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        {st.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div>
@@ -649,13 +688,29 @@ const Profile = () => {
                   ) : orders.length === 0 ? (
                     <div className="pf-empty-state">
                       <FaShoppingBag size={54} className="mb-3" />
-                      <h5 className="text-muted">No orders yet</h5>
+                      <h5 className="text-muted">
+                        {orderStatusFilter === "all"
+                          ? "No orders yet"
+                          : `No ${orderStatusFilter.replace(/_/g, " ")} orders found`}
+                      </h5>
                       <p className="text-muted mb-3">
-                        Your order history will appear here
+                        {orderStatusFilter === "all"
+                          ? "Your order history will appear here"
+                          : "Try selecting a different status filter"}
                       </p>
-                      <Link to="/products" className="pf-btn pf-btn--solid">
-                        Start Shopping
-                      </Link>
+                      {orderStatusFilter !== "all" ? (
+                        <button
+                          type="button"
+                          onClick={() => setOrderStatusFilter("all")}
+                          className="pf-btn pf-btn--outline"
+                        >
+                          View All Orders
+                        </button>
+                      ) : (
+                        <Link to="/products" className="pf-btn pf-btn--solid">
+                          Start Shopping
+                        </Link>
+                      )}
                     </div>
                   ) : (
                     <>
@@ -691,7 +746,14 @@ const Profile = () => {
                                       </span>
                                     )}
                                   </td>
-                                  <td>{formatDate(order.createdAt)}</td>
+                                  <td>
+                                    <div>{formatDate(order.createdAt)}</div>
+                                    {(order.estimated_window_formatted || order.chosen_time_option) && (
+                                      <small className="text-success d-block fw-semibold" style={{ fontSize: "0.72rem" }}>
+                                        🕒 {order.estimated_window_formatted || `Slot: ${order.chosen_time_option}`}
+                                      </small>
+                                    )}
+                                  </td>
                                   <td>{order.items?.length || order.total_items || 1} items</td>
                                   <td
                                     className="fw-bold"
@@ -775,6 +837,11 @@ const Profile = () => {
                                 <span>{formatDate(order.createdAt)}</span>
                                 <span>{order.items?.length || order.total_items || 1} items</span>
                               </div>
+                              {(order.estimated_window_formatted || order.chosen_time_option) && (
+                                <div className="px-3 pb-1" style={{ fontSize: "0.75rem", color: "#137333", fontWeight: 600 }}>
+                                  🕒 {order.estimated_window_formatted || `Slot: ${order.chosen_time_option}`}
+                                </div>
+                              )}
                               <div className="pf-order-card-footer">
                                 <span
                                   className="fw-bold"
@@ -946,6 +1013,20 @@ const Profile = () => {
                             onChange={handleAddressFormChange}
                           />
                         </div>
+
+                        <LocationPicker
+                          latitude={addressForm.latitude}
+                          longitude={addressForm.longitude}
+                          autoLocate={editingAddressId === "new"}
+                          onChange={({ latitude, longitude }) => {
+                            setAddressForm((prev) => ({
+                              ...prev,
+                              latitude,
+                              longitude,
+                            }));
+                          }}
+                        />
+
                         <div className="pf-field--full pf-checkbox-row">
                           <input
                             type="checkbox"
@@ -1019,6 +1100,12 @@ const Profile = () => {
                             <br />
                             {addr.city}, {addr.state} - {addr.pincode},{" "}
                             {addr.country}
+                            {addr.latitude && addr.longitude && (
+                              <div className="mt-1 small text-success d-flex align-items-center gap-1">
+                                <FaMapMarkerAlt size={11} />
+                                <span>GPS Pinned ({parseFloat(addr.latitude).toFixed(4)}, {parseFloat(addr.longitude).toFixed(4)})</span>
+                              </div>
+                            )}
                           </div>
 
                           <div className="pf-address-actions">

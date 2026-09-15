@@ -460,6 +460,19 @@ const ProductDetail = () => {
                         </span>
                       </div>
                     )}
+                    {product.distance_km !== null && product.distance_km !== undefined && (
+                      <div className="pd-vendor-detail">
+                        <FaMapMarkerAlt size={11} style={{ color: GREEN }} />
+                        <span>
+                          <strong>Distance:</strong> {product.distance_km} km away
+                          {product.in_delivery_radius ? (
+                            <span className="badge bg-success-subtle text-success ms-2 py-0 px-1" style={{ fontSize: '0.68rem' }}>Within Delivery Range</span>
+                          ) : (
+                            <span className="badge bg-danger-subtle text-danger ms-2 py-0 px-1" style={{ fontSize: '0.68rem' }}>Outside Delivery Radius</span>
+                          )}
+                        </span>
+                      </div>
+                    )}
                     {product.store_opening_time &&
                       product.store_closing_time && (
                         <div className="pd-vendor-detail">
@@ -511,6 +524,56 @@ const ProductDetail = () => {
                 {inWishlist ? "Remove from Wishlist" : "Add to Wishlist"}
               </button>
             </div>
+
+            {product.alternatives && product.alternatives.length > 0 && (
+              <div className="pd-alternatives-box mt-3 p-3 rounded" style={{ background: "#f8fafc", border: "1.5px solid #e2e8f0" }}>
+                <div className="fw-bold d-flex align-items-center gap-1 mb-2" style={{ color: NAVY, fontSize: "0.88rem" }}>
+                  <FaStore size={12} style={{ color: GREEN }} />
+                  Also available from {product.alternatives.length} other nearby seller{product.alternatives.length > 1 ? "s" : ""}
+                </div>
+                <div className="d-flex flex-column gap-2">
+                  {product.alternatives.map((alt) => (
+                    <div
+                      key={alt.vendor_product_id}
+                      className="d-flex justify-content-between align-items-center p-2 rounded bg-white"
+                      style={{ border: "1px solid #edf2f7" }}
+                    >
+                      <div className="me-2" style={{ minWidth: 0 }}>
+                        <div className="fw-bold text-truncate" style={{ color: NAVY, fontSize: "0.85rem" }}>
+                          {alt.store_name || alt.vendor_name}
+                        </div>
+                        <div className="text-muted d-flex align-items-center gap-2" style={{ fontSize: "0.75rem" }}>
+                          <span>{alt.distance_km} km away</span>
+                          <span>•</span>
+                          <span className="text-success fw-medium">Stock: {alt.stock}</span>
+                        </div>
+                      </div>
+                      <div className="d-flex align-items-center gap-2 flex-shrink-0">
+                        <span className="fw-bold" style={{ color: GREEN, fontSize: "0.95rem" }}>
+                          {formatPrice(alt.sale_price ?? alt.price)}
+                        </span>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-success"
+                          style={{ fontSize: "0.75rem" }}
+                          onClick={() => addToCart({
+                            id: alt.vendor_product_id,
+                            name: product.name,
+                            price: alt.sale_price ?? alt.price,
+                            sale_price: alt.sale_price ?? alt.price,
+                            image_url: product.image_url,
+                            category_name: product.category_name,
+                          })}
+                        >
+                          <FaShoppingCart size={11} className="me-1" />
+                          Add
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

@@ -19,9 +19,28 @@ export const OrderProvider = ({ children }) => {
     totalOrders: 0,
   });
 
-  const placeOrder = useCallback(async ({ addressId, notes, deliveryCharge, deliveryType, distance }) => {
-    return await OrderService.placeOrder({ addressId, notes, deliveryCharge, deliveryType, distance });
-  }, []);
+  const placeOrder = useCallback(
+    async ({
+      addressId,
+      notes,
+      deliveryCharge,
+      deliveryType,
+      distance,
+      chosenTimeOption,
+      customDeliveryTime,
+    }) => {
+      return await OrderService.placeOrder({
+        addressId,
+        notes,
+        deliveryCharge,
+        deliveryType,
+        distance,
+        chosenTimeOption,
+        customDeliveryTime,
+      });
+    },
+    [],
+  );
 
   const fetchOrders = useCallback(async ({ page = 1, status } = {}) => {
     setLoading(true);

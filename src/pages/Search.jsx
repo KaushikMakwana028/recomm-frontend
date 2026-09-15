@@ -2,16 +2,17 @@ import React, { useState, useEffect, useRef } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   FaSearch,
-  FaShoppingCart,
   FaHeart,
   FaExclamationCircle,
   FaChevronRight,
   FaTimes,
   FaPlus,
   FaChevronLeft,
+  FaStore,
 } from "react-icons/fa";
 import ProductService from "../services/productService";
 import CategoryService from "../services/categoryService";
+import AlternativeSellers from "../components/AlternativeSellers";
 import { useCart } from "../context/CartContext";
 import { useWishlist } from "../context/WishlistContext";
 import { formatPrice } from "../utils/helpers";
@@ -134,6 +135,14 @@ const ProductCard = ({
             <span className="prod-mrp">{formatPrice(product.mrp)}</span>
           )}
         </div>
+        <div className="text-muted small mt-1 d-flex align-items-center gap-1" style={{ fontSize: "0.72rem" }}>
+          <FaStore size={10} className="text-secondary flex-shrink-0" />
+          <span className="text-truncate">
+            Sold by <strong>{product.store_name || product.vendor_name || "Verified Store"}</strong>
+            {product.distance_km !== undefined && product.distance_km !== null ? ` • ${product.distance_km} km away` : ""}
+          </span>
+        </div>
+        <AlternativeSellers product={product} />
       </div>
     </div>
   );

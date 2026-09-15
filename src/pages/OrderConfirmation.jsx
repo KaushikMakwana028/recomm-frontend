@@ -22,9 +22,10 @@ import OrderService from "../services/orderService";
 import "../styles/OrderConfirmation.css";
 
 const STATUS_STEPS = [
-  { key: "placed", label: "Order Placed", icon: FaCheckCircle },
-  { key: "processing", label: "Processing", icon: FaBox },
-  { key: "shipped", label: "Shipped", icon: FaTruck },
+  { key: "pending", label: "Order Placed", icon: FaCheckCircle },
+  { key: "confirmed", label: "Confirmed", icon: FaCheck },
+  { key: "packed", label: "Packed", icon: FaBox },
+  { key: "out_for_delivery", label: "Out for Delivery", icon: FaTruck },
   { key: "delivered", label: "Delivered", icon: FaHome },
 ];
 
@@ -120,6 +121,11 @@ const OrderConfirmation = () => {
     deliveryType: orderData.delivery_type || (orderData.delivery === "urgent" ? "urgent" : "normal"),
     deliveryOption: orderData.delivery_option,
     distance: orderData.distance,
+    chosenTimeOption: orderData.chosen_time_option || orderData.chosenTimeOption,
+    estimatedWindowFormatted: orderData.estimated_window_formatted || orderData.estimatedWindowFormatted,
+    estimatedWindowStart: orderData.estimated_window_start || orderData.estimatedWindowStart,
+    estimatedWindowEnd: orderData.estimated_window_end || orderData.estimatedWindowEnd,
+    customDeliveryTime: orderData.custom_delivery_time || orderData.customDeliveryTime,
     paymentStatus: orderData.payment_status,
     invoiceUrl: orderData.invoice_url,
     canDownloadInvoice: orderData.can_download_invoice,
@@ -214,15 +220,19 @@ const OrderConfirmation = () => {
   const getActiveStepIndex = (status) => {
     switch (status?.toLowerCase()) {
       case "pending":
+      case "new":
         return 0;
       case "confirmed":
-      case "processing":
-      case "packed":
+      case "accepted":
         return 1;
-      case "out_for_delivery":
+      case "packed":
+      case "processing":
         return 2;
-      case "delivered":
+      case "out_for_delivery":
+      case "shipped":
         return 3;
+      case "delivered":
+        return 4;
       case "cancelled":
       default:
         return -1;
@@ -392,6 +402,36 @@ const OrderConfirmation = () => {
                             ? "By Self"
                             : "Delivery Partner"}
                           {order.distance ? ` (${order.distance} KM)` : ""}
+                        </span>
+                      </div>
+                    )}
+
+                    {(order.chosenTimeOption || orderData.chosen_time_option) && (
+                      <div className="oc-detail-row">
+                        <span className="oc-label">Time Slot</span>
+                        <span
+                          className="oc-value text-capitalize fw-bold"
+                          style={{ color: "#00204E" }}
+                        >
+                          {order.chosenTimeOption || orderData.chosen_time_option}
+                        </span>
+                      </div>
+                    )}
+
+                    {(order.estimatedWindowFormatted ||
+                      orderData.estimated_window_formatted ||
+                      order.estimatedWindowStart ||
+                      orderData.estimated_window_start) && (
+                      <div className="oc-detail-row">
+                        <span className="oc-label">Estimated Delivery</span>
+                        <span
+                          className="oc-value fw-semibold"
+                          style={{ color: "#34A129" }}
+                        >
+                          🕒{" "}
+                          {order.estimatedWindowFormatted ||
+                            orderData.estimated_window_formatted ||
+                            `${order.estimatedWindowStart || orderData.estimated_window_start} – ${order.estimatedWindowEnd || orderData.estimated_window_end}`}
                         </span>
                       </div>
                     )}

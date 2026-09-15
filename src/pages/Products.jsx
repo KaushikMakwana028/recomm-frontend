@@ -10,9 +10,11 @@ import {
   FaFilter,
   FaCheck,
   FaChevronRight,
+  FaStore,
 } from "react-icons/fa";
 import ProductService from "../services/productService";
 import CategoryService from "../services/categoryService";
+import AlternativeSellers from "../components/AlternativeSellers";
 import { useCart } from "../context/CartContext";
 import { useWishlist } from "../context/WishlistContext";
 import { formatPrice } from "../utils/helpers";
@@ -73,6 +75,25 @@ const Products = () => {
     CategoryService.getCategoryList().then((result) => { 
       if (result.success) setCategories(result.data || []);
     });
+
+    // Request customer's current live location on visit
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const liveLocation = {
+            latitude: parseFloat(position.coords.latitude.toFixed(8)),
+            longitude: parseFloat(position.coords.longitude.toFixed(8)),
+            accuracy: position.coords.accuracy,
+            timestamp: Date.now(),
+          };
+          localStorage.setItem("customer_live_location", JSON.stringify(liveLocation));
+        },
+        (err) => {
+          console.debug("Live location notice:", err.message);
+        },
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+      );
+    }
   }, []);
 
   // Lock body scroll while the filter drawer is open
@@ -604,8 +625,16 @@ const Products = () => {
                       </p>
                     )}
                     <span className="pr-price fs-6">
-                      {formatPrice(product.price)}
+                      {formatPrice(product.sale_price ?? product.price)}
                     </span>
+                    <div className="text-muted small mt-1 d-flex align-items-center gap-1" style={{ fontSize: "0.72rem" }}>
+                      <FaStore size={10} className="text-secondary flex-shrink-0" />
+                      <span className="text-truncate">
+                        Sold by <strong>{product.store_name || product.vendor_name || "Verified Store"}</strong>
+                        {product.distance_km !== undefined && product.distance_km !== null ? ` • ${product.distance_km} km away` : ""}
+                      </span>
+                    </div>
+                    <AlternativeSellers product={product} />
                   </div>
 
                   <div className="card-footer bg-white border-0 pt-0">
@@ -654,8 +683,16 @@ const Products = () => {
                             </p>
                           )}
                           <span className="pr-price fs-6">
-                            {formatPrice(product.price)}
+                            {formatPrice(product.sale_price ?? product.price)}
                           </span>
+                          <div className="text-muted small mt-1 d-flex align-items-center gap-1" style={{ fontSize: "0.74rem" }}>
+                            <FaStore size={11} className="text-secondary flex-shrink-0" />
+                            <span>
+                              Sold by <strong>{product.store_name || product.vendor_name || "Verified Store"}</strong>
+                              {product.distance_km !== undefined && product.distance_km !== null ? ` • ${product.distance_km} km away` : ""}
+                            </span>
+                          </div>
+                          <AlternativeSellers product={product} />
                         </div>
                         <button
                           className="btn btn-link p-0"
