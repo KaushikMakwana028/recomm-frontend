@@ -10,13 +10,15 @@ import {
 import { useWishlist } from "../context/WishlistContext";
 import { useCart } from "../context/CartContext";
 import { useToast } from "../context/ToastContext";
+import { ProductGridSkeleton } from "../components/SkeletonLoaders";
 import { formatPrice, getImageUrl } from "../utils/helpers";
 
 const NAVY = "#00204E";
 const GREEN = "#34A129";
 
 const Wishlist = () => {
-  const { wishlistItems, removeFromWishlist, clearWishlist } = useWishlist();
+  const { wishlistItems, removeFromWishlist, clearWishlist, loading } =
+    useWishlist();
   const { addToCart } = useCart();
   const { showToast } = useToast();
 
@@ -33,6 +35,20 @@ const Wishlist = () => {
     await clearWishlist();
     showToast("Added all wishlist items to cart!", "success");
   };
+
+  if (loading) {
+    return (
+      <div className="wl-page bg-light py-5">
+        <div className="container">
+          <div
+            className="rc-shimmer mb-4"
+            style={{ height: "32px", width: "220px", borderRadius: "8px" }}
+          />
+          <ProductGridSkeleton count={8} />
+        </div>
+      </div>
+    );
+  }
 
   if (wishlistItems.length === 0) {
     return (

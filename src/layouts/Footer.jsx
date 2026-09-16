@@ -32,7 +32,7 @@ const SUPPORT_LINKS = [
   { label: "Help Center", path: "/" },
   { label: "Contact Us", path: "/" },
   { label: "Shipping Info", path: "/" },
-  { label: "Returns", path: "/" },
+  { label: "Returns", path: "/refund-policy" },
   { label: "Track Order", path: "/profile?tab=orders" },
 ];
 
@@ -45,9 +45,9 @@ const SOCIAL_LINKS = [
 ];
 
 const BOTTOM_LINKS = [
-  { label: "Privacy Policy", path: "/" },
-  { label: "Terms of Service", path: "/" },
-  { label: "Cookie Policy", path: "/" },
+  { label: "Terms & Conditions", path: "/terms-conditions" },
+  { label: "Privacy Policy", path: "/privacy-policy" },
+  { label: "Refund Policy", path: "/refund-policy" },
 ];
 
 const FEATURES = [

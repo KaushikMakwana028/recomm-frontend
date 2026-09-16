@@ -7,6 +7,9 @@ export const call = async (promise) => {
     return {
       success: res.data.status === true,
       data: res.data.data,
+      no_nearby_vendors: res.data.no_nearby_vendors ?? res.data.data?.no_nearby_vendors ?? false,
+      nearby_vendors_count: res.data.nearby_vendors_count ?? res.data.data?.nearby_vendors_count ?? null,
+      raw: res.data,
       error: null,
     };
   } catch (err) {

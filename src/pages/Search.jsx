@@ -13,6 +13,7 @@ import {
 import ProductService from "../services/productService";
 import CategoryService from "../services/categoryService";
 import AlternativeSellers from "../components/AlternativeSellers";
+import NoVendorsEmptyState from "../components/NoVendorsEmptyState";
 import { useCart } from "../context/CartContext";
 import { useWishlist } from "../context/WishlistContext";
 import { formatPrice } from "../utils/helpers";
@@ -100,78 +101,87 @@ const ProductCard = ({
             className={isInWishlist(product.id) ? "is-active" : ""}
           />
         </button>
-
-        {product.category_name && (
-          <span className="prod-cat-pill">{product.category_name}</span>
-        )}
-
-        <button
-          type="button"
-          className="prod-add-fab"
-          onClick={() =>
-            addToCart({
-              id: product.id,
-              name: product.product_name,
-              price: product.selling_price,
-              image_url: product.image_url,
-              category_name: product.category_name,
-            })
-          }
-          aria-label="Add to cart"
-        >
-          <FaPlus size={12} />
-        </button>
       </div>
 
-      <div className="prod-body">
+      <div className="prod-info">
+        {product.category_name && (
+          <span className="prod-category">{product.category_name}</span>
+        )}
+
         <Link to={`/product/${product.id}`} className="prod-title">
           {product.product_name}
         </Link>
-        <div className="prod-price-row">
-          <span className="prod-price">
-            {formatPrice(product.selling_price)}
-          </span>
-          {hasDiscount && (
-            <span className="prod-mrp">{formatPrice(product.mrp)}</span>
-          )}
-        </div>
-        <div className="text-muted small mt-1 d-flex align-items-center gap-1" style={{ fontSize: "0.72rem" }}>
-          <FaStore size={10} className="text-secondary flex-shrink-0" />
-          <span className="text-truncate">
-            Sold by <strong>{product.store_name || product.vendor_name || "Verified Store"}</strong>
-            {product.distance_km !== undefined && product.distance_km !== null ? ` • ${product.distance_km} km away` : ""}
-          </span>
-        </div>
+
+        {product.store_name && (
+          <div className="prod-seller-badge">
+            <FaStore size={9} />
+            <span className="prod-seller-name">{product.store_name}</span>
+            {product.distance_km !== undefined &&
+            product.distance_km !== null ? (
+              <span className="prod-seller-dist">{product.distance_km} km</span>
+            ) : null}
+          </div>
+        )}
+
         <AlternativeSellers product={product} />
+
+        <div className="prod-footer">
+          <div className="prod-pricing">
+            <span className="prod-price">
+              {formatPrice(product.selling_price)}
+            </span>
+            {hasDiscount && (
+              <span className="prod-mrp">{formatPrice(product.mrp)}</span>
+            )}
+          </div>
+
+          <button
+            type="button"
+            className="prod-add-btn"
+            onClick={() =>
+              addToCart({
+                id: product.id,
+                name: product.product_name,
+                price: product.selling_price,
+                image_url: product.image_url,
+                category_name: product.category_name,
+                store_name: product.store_name,
+                vendor_id: product.vendor_id,
+              })
+            }
+          >
+            <FaPlus size={10} />
+            <span>Add</span>
+          </button>
+        </div>
       </div>
     </div>
   );
 };
 
-// ---- Skeleton placeholder ----
+// Simple skeleton card
 const SkeletonCard = () => (
-  <div className="prod-card">
-    <div className="skeleton-img shimmer" />
-    <div className="prod-body">
-      <div
-        className="skeleton-line shimmer"
-        style={{ width: "85%", height: "12px" }}
-      />
-      <div
-        className="skeleton-line shimmer"
-        style={{ width: "50%", height: "14px" }}
-      />
+  <div className="prod-card skeleton-card">
+    <div className="skeleton-thumb shimmer" />
+    <div className="skeleton-body">
+      <div className="skeleton-line shimmer" style={{ width: "40%" }} />
+      <div className="skeleton-line shimmer" style={{ width: "85%" }} />
+      <div className="skeleton-line shimmer" style={{ width: "55%" }} />
     </div>
   </div>
 );
 
-// ---- Horizontal scroll carousel (used for "Frequently bought with") ----
+// Horizontal scroll container with chevron buttons
 const ScrollCarousel = ({ children }) => {
   const trackRef = useRef(null);
 
-  const scrollBy = (dir) => {
+  const scroll = (dir) => {
     if (!trackRef.current) return;
-    trackRef.current.scrollBy({ left: dir * 176, behavior: "smooth" });
+    const scrollAmount = 300;
+    trackRef.current.scrollBy({
+      left: dir === "left" ? -scrollAmount : scrollAmount,
+      behavior: "smooth",
+    });
   };
 
   return (
@@ -179,7 +189,7 @@ const ScrollCarousel = ({ children }) => {
       <button
         type="button"
         className="carousel-nav carousel-nav--left"
-        onClick={() => scrollBy(-1)}
+        onClick={() => scroll("left")}
         aria-label="Scroll left"
       >
         <FaChevronLeft size={12} />
@@ -190,7 +200,7 @@ const ScrollCarousel = ({ children }) => {
       <button
         type="button"
         className="carousel-nav carousel-nav--right"
-        onClick={() => scrollBy(1)}
+        onClick={() => scroll("right")}
         aria-label="Scroll right"
       >
         <FaChevronRight size={12} />
@@ -212,6 +222,7 @@ const Search = () => {
   const [categories, setCategories] = useState([]);
   const [blendedProducts, setBlendedProducts] = useState([]);
   const [relatedProducts, setRelatedProducts] = useState([]);
+  const [noNearbyVendors, setNoNearbyVendors] = useState(false);
 
   useEffect(() => {
     setSearchInput(query);
@@ -222,6 +233,7 @@ const Search = () => {
       setCategories([]);
       setBlendedProducts([]);
       setRelatedProducts([]);
+      setNoNearbyVendors(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
@@ -229,11 +241,33 @@ const Search = () => {
   const performSearch = async (searchQuery) => {
     setLoading(true);
     try {
+      let lat = undefined;
+      let lng = undefined;
+      try {
+        const saved = localStorage.getItem("customer_live_location");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.latitude && parsed.longitude) {
+            lat = parsed.latitude;
+            lng = parsed.longitude;
+          }
+        }
+      } catch (e) {}
+
       const [prodRes, catRes, allProdRes] = await Promise.all([
-        ProductService.searchProducts({ search: searchQuery, limit: 20 }),
+        ProductService.searchProducts({
+          search: searchQuery,
+          limit: 20,
+          latitude: lat,
+          longitude: lng,
+        }),
         CategoryService.searchCategories({ search: searchQuery, limit: 10 }),
-        ProductService.getProductList(),
+        ProductService.getProductList({ latitude: lat, longitude: lng }),
       ]);
+
+      setNoNearbyVendors(
+        Boolean(prodRes.no_nearby_vendors || allProdRes.no_nearby_vendors),
+      );
 
       let matchedProducts = [];
       if (prodRes.success) {
@@ -505,7 +539,7 @@ const Search = () => {
         .prod-grid {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 0.7rem;
+          gap: 0.65rem;
           margin-bottom: 2.25rem;
         }
         @media (min-width: 480px) { .prod-grid { gap: 0.9rem; } }
@@ -513,6 +547,7 @@ const Search = () => {
         @media (min-width: 992px) { .prod-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
         @media (min-width: 1200px) { .prod-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
 
+        /* ---------- Product card ---------- */
         .prod-card {
           border-radius: 14px;
           overflow: hidden;
@@ -527,15 +562,15 @@ const Search = () => {
         }
         .prod-card:hover { transform: translateY(-3px); box-shadow: 0 12px 24px rgba(0,32,78,0.12); }
 
-        .prod-img-wrap { position: relative; aspect-ratio: 1 / 1; background: #f1f5f9; overflow: hidden; }
+        .prod-img-wrap { position: relative; aspect-ratio: 1 / 1; background: #f1f5f9; overflow: hidden; flex-shrink: 0; }
         .prod-img-link { display: block; width: 100%; height: 100%; }
         .prod-img-wrap img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s ease; display: block; }
         .prod-card:hover .prod-img-wrap img { transform: scale(1.07); }
         .prod-img-scrim {
           position: absolute;
           inset: auto 0 0 0;
-          height: 46%;
-          background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.32) 100%);
+          height: 40%;
+          background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.28) 100%);
           pointer-events: none;
         }
 
@@ -543,17 +578,8 @@ const Search = () => {
           position: absolute; top: 8px; left: 8px;
           background: ${GREEN}; color: #fff;
           font-size: 0.62rem; font-weight: 800;
-          padding: 3px 6px; border-radius: 6px;
+          padding: 3px 7px; border-radius: 6px;
           z-index: 4; letter-spacing: 0.02em;
-        }
-
-        .prod-cat-pill {
-          position: absolute; bottom: 8px; left: 8px;
-          color: #fff; font-size: 0.62rem; font-weight: 700;
-          text-transform: uppercase; letter-spacing: 0.04em;
-          text-shadow: 0 1px 3px rgba(0,0,0,0.4);
-          z-index: 4; max-width: 78%;
-          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         }
 
         .prod-wish-btn {
@@ -568,38 +594,107 @@ const Search = () => {
         .prod-wish-btn:active { transform: scale(0.88); }
         .prod-wish-btn .is-active { color: #ef4444; }
 
-        .prod-add-fab {
-          position: absolute; bottom: -14px; right: 10px;
-          width: 30px; height: 30px; border-radius: 50%;
-          background: ${GREEN}; color: #fff; border: 3px solid #fff;
-          display: flex; align-items: center; justify-content: center;
-          cursor: pointer; z-index: 6;
-          box-shadow: 0 4px 10px rgba(52,161,41,0.4);
-          transition: background 0.2s ease, transform 0.15s ease;
+        /* Info block — this is what makes the card readable */
+        .prod-info {
+          padding: 0.7rem 0.75rem 0.75rem;
+          display: flex;
+          flex-direction: column;
+          gap: 0.3rem;
+          flex: 1;
+          min-width: 0;
         }
-        .prod-add-fab:hover { background: ${GREEN_DEEP}; }
-        .prod-add-fab:active { transform: scale(0.9); }
 
-        .prod-body {
-          padding: 1.05rem 0.65rem 0.65rem;
-          display: flex; flex-direction: column; flex: 1; gap: 0.4rem;
+        .prod-category {
+          color: #94a3b8;
+          font-weight: 600;
+          font-size: 0.65rem;
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
         }
+
         .prod-title {
-          color: ${NAVY}; font-weight: 700; font-size: 0.8rem; line-height: 1.35;
+          color: ${NAVY};
+          font-weight: 700;
+          font-size: 0.82rem;
+          line-height: 1.35;
           text-decoration: none;
-          display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-          overflow: hidden; min-height: 2.16em;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+          min-height: 2.2em;
         }
         .prod-title:hover { color: ${GREEN_DEEP}; }
 
-        .prod-price-row { display: flex; align-items: baseline; gap: 0.4rem; flex-wrap: wrap; margin-top: auto; }
-        .prod-price { color: ${GREEN_DEEP}; font-weight: 800; font-size: 0.92rem; }
-        .prod-mrp { color: #b0b8c4; text-decoration: line-through; font-size: 0.7rem; }
+        .prod-seller-badge {
+          display: flex;
+          align-items: center;
+          gap: 5px;
+          color: #64748b;
+          font-size: 0.68rem;
+          min-width: 0;
+        }
+        .prod-seller-name {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          min-width: 0;
+        }
+        .prod-seller-dist {
+          color: ${GREEN_DEEP};
+          font-weight: 700;
+          flex-shrink: 0;
+        }
+        .prod-seller-dist::before {
+          content: "\\00b7";
+          margin-right: 5px;
+          color: #cbd5e1;
+        }
 
-        .prod-card--compact { width: 148px; flex: 0 0 148px; scroll-snap-align: start; }
+        .prod-footer {
+          margin-top: auto;
+          padding-top: 0.5rem;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 0.5rem;
+        }
+
+        .prod-pricing {
+          display: flex;
+          align-items: baseline;
+          gap: 0.4rem;
+          flex-wrap: wrap;
+          min-width: 0;
+        }
+        .prod-price { color: ${GREEN_DEEP}; font-weight: 800; font-size: 0.92rem; white-space: nowrap; }
+        .prod-mrp { color: #b0b8c4; text-decoration: line-through; font-size: 0.7rem; white-space: nowrap; }
+
+        .prod-add-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 5px;
+          background: ${GREEN};
+          color: #fff;
+          border: none;
+          border-radius: 8px;
+          padding: 0.42rem 0.65rem;
+          font-weight: 700;
+          font-size: 0.72rem;
+          cursor: pointer;
+          flex-shrink: 0;
+          transition: background 0.2s ease, transform 0.15s ease;
+        }
+        .prod-add-btn:hover { background: ${GREEN_DEEP}; }
+        .prod-add-btn:active { transform: scale(0.94); }
+
+        .prod-card--compact { width: 150px; flex: 0 0 150px; scroll-snap-align: start; }
 
         /* ---------- Skeleton ---------- */
-        .skeleton-img { width: 100%; aspect-ratio: 1; }
+        .skeleton-card { padding: 0; }
+        .skeleton-thumb { aspect-ratio: 1; width: 100%; }
+        .skeleton-body { padding: 0.7rem 0.75rem 0.9rem; }
         .skeleton-line { height: 10px; border-radius: 4px; margin-bottom: 8px; }
         .shimmer {
           background: linear-gradient(90deg, #eef1f5 25%, #e2e8f0 37%, #eef1f5 63%);
@@ -685,6 +780,13 @@ const Search = () => {
         .idle-state { text-align: center; padding: 3.25rem 1.5rem; color: #9aa5b5; }
         .idle-state svg { margin-bottom: 1rem; opacity: 0.5; }
         .idle-state h4 { color: ${NAVY}; font-weight: 700; margin-bottom: 0.4rem; }
+
+        /* ---------- Small-phone tweaks ---------- */
+        @media (max-width: 360px) {
+          .prod-title { font-size: 0.78rem; }
+          .prod-add-btn span { display: none; }
+          .prod-add-btn { padding: 0.42rem; border-radius: 50%; width: 30px; height: 30px; }
+        }
       `}</style>
 
       {/* Hero */}
@@ -793,6 +895,10 @@ const Search = () => {
                     />
                   ))}
                 </div>
+              </div>
+            ) : noNearbyVendors ? (
+              <div className="bg-white rounded-4 p-4 shadow-sm my-4">
+                <NoVendorsEmptyState />
               </div>
             ) : (
               <div className="empty-warning-card">

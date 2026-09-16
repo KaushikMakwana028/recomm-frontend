@@ -5,7 +5,7 @@ import CartService from "./cartService";
 import WishlistService from "./wishlistService";
 import ProfileService from "./profileService";
 import OrderService from "./orderService";
-import PromoService from "./promoService";
+import LegalService from "./legalService";
 
 export {
   AuthService,
@@ -15,5 +15,6 @@ export {
   WishlistService,
   ProfileService,
   OrderService,
-  PromoService,
+  LegalService,
 };
+

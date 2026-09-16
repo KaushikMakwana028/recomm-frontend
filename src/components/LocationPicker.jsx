@@ -52,11 +52,19 @@ const LocationPicker = ({
       scrollWheelZoom: true,
     });
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+      subdomains: ["a", "b", "c", "d"],
       attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-      maxZoom: 19,
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      maxZoom: 20,
     }).addTo(map);
+
+    // Invalidate size shortly after mounting to ensure perfect rendering in modals or accordion containers
+    setTimeout(() => {
+      if (map) {
+        map.invalidateSize();
+      }
+    }, 250);
 
     let marker = null;
     if (hasCoords) {

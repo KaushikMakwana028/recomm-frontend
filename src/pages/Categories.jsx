@@ -7,6 +7,11 @@ import {
   FaThLarge,
 } from "react-icons/fa";
 import CategoryService from "../services/categoryService";
+import NoVendorsEmptyState from "../components/NoVendorsEmptyState";
+import {
+  ProductGridSkeleton,
+  CategoryGridSkeleton,
+} from "../components/SkeletonLoaders";
 import { useCart } from "../context/CartContext";
 import { useWishlist } from "../context/WishlistContext";
 import { formatPrice } from "../utils/helpers";
@@ -27,6 +32,7 @@ const Categories = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [noNearbyVendors, setNoNearbyVendors] = useState(false);
 
   // Always load the category list (used for sidebar / grid)
   useEffect(() => {
@@ -55,9 +61,22 @@ const Categories = () => {
     setLoading(true);
     setError("");
 
+    let lat = undefined;
+    let lng = undefined;
+    try {
+      const saved = localStorage.getItem("customer_live_location");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.latitude && parsed.longitude) {
+          lat = parsed.latitude;
+          lng = parsed.longitude;
+        }
+      }
+    } catch (e) {}
+
     const [detailResult, productsResult] = await Promise.all([
       CategoryService.getCategoryDetail(categoryId),
-      CategoryService.getProductsByCategory(categoryId),
+      CategoryService.getProductsByCategory(categoryId, { latitude: lat, longitude: lng }),
     ]);
 
     if (detailResult.success) {
@@ -68,6 +87,9 @@ const Categories = () => {
 
     if (productsResult.success) {
       setProducts(productsResult.data || []);
+      setNoNearbyVendors(Boolean(productsResult.no_nearby_vendors));
+    } else {
+      setNoNearbyVendors(false);
     }
 
     setLoading(false);
@@ -211,15 +233,7 @@ const Categories = () => {
             </div>
 
             {loading ? (
-              <div className="text-center py-5">
-                <div
-                  className="spinner-border"
-                  style={{ color: GREEN }}
-                  role="status"
-                >
-                  <span className="visually-hidden">Loading...</span>
-                </div>
-              </div>
+              <CategoryGridSkeleton count={8} />
             ) : categories.length === 0 ? (
               <div className="text-center py-5">
                 <FaThLarge size={44} className="text-muted mb-3" />
@@ -278,24 +292,20 @@ const Categories = () => {
             )}
 
             {loading ? (
-              <div className="text-center py-5">
-                <div
-                  className="spinner-border"
-                  style={{ color: GREEN }}
-                  role="status"
-                >
-                  <span className="visually-hidden">Loading...</span>
-                </div>
-              </div>
+              <ProductGridSkeleton count={8} />
             ) : products.length === 0 && !error ? (
-              <div className="text-center py-5">
-                <h5 className="text-muted">
-                  No products found in this category
-                </h5>
-                <Link to="/products" className="btn cp-btn-cta text-white mt-3">
-                  Browse All Products
-                </Link>
-              </div>
+              noNearbyVendors ? (
+                <NoVendorsEmptyState />
+              ) : (
+                <div className="text-center py-5">
+                  <h5 className="text-muted">
+                    No products found in this category
+                  </h5>
+                  <Link to="/products" className="btn cp-btn-cta text-white mt-3">
+                    Browse All Products
+                  </Link>
+                </div>
+              )
             ) : (
               <div className="row g-3 g-md-4">
                 {products.map((product) => (

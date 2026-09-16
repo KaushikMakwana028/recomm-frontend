@@ -10,6 +10,11 @@ import {
   FaArrowRight,
 } from "react-icons/fa";
 import AuthService from "../services/authService";
+import NoVendorsEmptyState from "../components/NoVendorsEmptyState";
+import {
+  ProductGridSkeleton,
+  CategoryGridSkeleton,
+} from "../components/SkeletonLoaders";
 import { useCart } from "../context/CartContext";
 import { useWishlist } from "../context/WishlistContext";
 import { formatPrice } from "../utils/helpers";
@@ -25,6 +30,7 @@ const Home = () => {
   const [featuredProducts, setFeaturedProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [noNearbyVendors, setNoNearbyVendors] = useState(false);
 
   useEffect(() => {
     loadHomeData();
@@ -52,10 +58,26 @@ const Home = () => {
 
   const loadHomeData = async () => {
     setLoading(true);
-    const result = await AuthService.getHomeData();
+    let lat = undefined;
+    let lng = undefined;
+    try {
+      const saved = localStorage.getItem("customer_live_location");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.latitude && parsed.longitude) {
+          lat = parsed.latitude;
+          lng = parsed.longitude;
+        }
+      }
+    } catch (e) {}
+
+    const result = await AuthService.getHomeData({ latitude: lat, longitude: lng });
     if (result.success) {
       setFeaturedProducts(result.data.products || []);
       setCategories(result.data.categories || []);
+      setNoNearbyVendors(Boolean(result.no_nearby_vendors || result.data?.no_nearby_vendors));
+    } else {
+      setNoNearbyVendors(false);
     }
     setLoading(false);
   };
@@ -262,24 +284,28 @@ const Home = () => {
             <p>Explore our wide range of products</p>
           </div>
 
-          <div className="row g-3 g-md-4">
-            {categories.slice(0, 8).map((category) => (
-              <div key={category.id} className="col-6 col-md-4 col-lg-3">
-                <Link
-                  to={`/products?category_id=${category.id}`}
-                  className="hm-cat-tile"
-                >
-                  <img
-                    src={category.image_url || FALLBACK_IMG}
-                    alt={category.name}
-                    loading="lazy"
-                  />
-                  <div className="hm-cat-overlay" />
-                  <div className="hm-cat-label">{category.name}</div>
-                </Link>
-              </div>
-            ))}
-          </div>
+          {loading ? (
+            <CategoryGridSkeleton count={8} />
+          ) : (
+            <div className="row g-3 g-md-4">
+              {categories.slice(0, 8).map((category) => (
+                <div key={category.id} className="col-6 col-md-4 col-lg-3">
+                  <Link
+                    to={`/products?category_id=${category.id}`}
+                    className="hm-cat-tile"
+                  >
+                    <img
+                      src={category.image_url || FALLBACK_IMG}
+                      alt={category.name}
+                      loading="lazy"
+                    />
+                    <div className="hm-cat-overlay" />
+                    <div className="hm-cat-label">{category.name}</div>
+                  </Link>
+                </div>
+              ))}
+            </div>
+          )}
 
           {categories.length > 8 && (
             <div className="text-center mt-5">
@@ -300,19 +326,15 @@ const Home = () => {
           </div>
 
           {loading ? (
-            <div className="text-center py-5">
-              <div
-                className="spinner-border"
-                style={{ color: GREEN }}
-                role="status"
-              >
-                <span className="visually-hidden">Loading...</span>
-              </div>
-            </div>
+            <ProductGridSkeleton count={8} colClass="col-6 col-md-6 col-lg-3" />
           ) : featuredProducts.length === 0 ? (
-            <div className="text-center py-5">
-              <h5 className="text-muted">No featured products right now</h5>
-            </div>
+            noNearbyVendors ? (
+              <NoVendorsEmptyState />
+            ) : (
+              <div className="text-center py-5">
+                <h5 className="text-muted">No featured products right now</h5>
+              </div>
+            )
           ) : (
             <div className="row g-3 g-md-4">
               {featuredProducts.slice(0, 8).map((product) => (

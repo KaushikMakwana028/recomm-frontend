@@ -109,11 +109,13 @@ const AuthService = {
      HOME
   =========================================================== */
 
-  getHomeData: async ({ search = "", categoryId = "" } = {}) => {
+  getHomeData: async ({ search = "", categoryId = "", latitude, longitude } = {}) => {
     const params = {
       search,
       category_id: categoryId,
     };
+    if (latitude !== undefined) params.latitude = latitude;
+    if (longitude !== undefined) params.longitude = longitude;
 
     return call(
       axiosInstance.get("/home", {

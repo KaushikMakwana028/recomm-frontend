@@ -12,7 +12,7 @@ import {
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import ProfileService from "../services/profileService";
-import ProductService from "../services/productService";
+import OrderService from "../services/orderService";
 import { formatPrice, getImageUrl } from "../utils/helpers";
 
 const NAVY = "#00204E";
@@ -34,7 +34,7 @@ const Cart = () => {
   const [selectedAddress, setSelectedAddress] = useState(null);
   const [distance, setDistance] = useState(null);
   const [distanceLoading, setDistanceLoading] = useState(false);
-  const [vendorPincode, setVendorPincode] = useState("");
+  const [serverDeliveryCharge, setServerDeliveryCharge] = useState(null);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -57,81 +57,32 @@ const Cart = () => {
   }, [isAuthenticated]);
 
   useEffect(() => {
-    if (cartItems.length > 0) {
-      const fetchVendorPincode = async () => {
-        try {
-          const firstItem = cartItems[0];
-          const result = await ProductService.getProductDetail(firstItem.id);
-          if (result.success && result.data) {
-            const address = result.data.store_address || "";
-            const match = address.match(/\b\d{6}\b/);
-            if (match) {
-              setVendorPincode(match[0]);
-            } else {
-              setVendorPincode("382330"); // Fallback
+    if (selectedAddress?.id) {
+      setDistanceLoading(true);
+      OrderService.calculateDeliveryCharge({
+        addressId: selectedAddress.id,
+        deliveryType: "normal",
+      })
+        .then((res) => {
+          if (res.success && res.data) {
+            const dist = res.data.distance_km ?? res.data.distance;
+            setDistance(dist !== null && dist !== undefined ? parseFloat(dist) : 0);
+            if (res.data.total_delivery_charge !== undefined) {
+              setServerDeliveryCharge(parseFloat(res.data.total_delivery_charge));
             }
           }
-        } catch (e) {
-          console.error("Failed to fetch vendor pincode in cart", e);
-          setVendorPincode("382330"); // Fallback
-        }
-      };
-      fetchVendorPincode();
+        })
+        .catch((err) => {
+          console.error("Delivery charge calculation failed in cart:", err);
+        })
+        .finally(() => {
+          setDistanceLoading(false);
+        });
     }
-  }, [cartItems]);
-
-  const calculateDistance = async (vendorPin, customerPin) => {
-    if (!vendorPin || !customerPin) return;
-    setDistanceLoading(true);
-    try {
-      const vendorUrl = `https://nominatim.openstreetmap.org/search?postalcode=${vendorPin}&country=India&format=json`;
-      const vendorRes = await fetch(vendorUrl, { headers: { "Accept": "application/json" } });
-      if (!vendorRes.ok) throw new Error("Failed to reach geocoding service");
-      const vendorData = await vendorRes.json();
-      if (!vendorData || vendorData.length === 0) throw new Error("Vendor coords not found");
-      const vendorCoords = {
-        lat: parseFloat(vendorData[0].lat),
-        lon: parseFloat(vendorData[0].lon)
-      };
-
-      const customerUrl = `https://nominatim.openstreetmap.org/search?postalcode=${customerPin}&country=India&format=json`;
-      const customerRes = await fetch(customerUrl, { headers: { "Accept": "application/json" } });
-      if (!customerRes.ok) throw new Error("Failed to reach geocoding service");
-      const customerData = await customerRes.json();
-      if (!customerData || customerData.length === 0) throw new Error("Customer coords not found");
-      const customerCoords = {
-        lat: parseFloat(customerData[0].lat),
-        lon: parseFloat(customerData[0].lon)
-      };
-
-      const R = 6371;
-      const dLat = (customerCoords.lat - vendorCoords.lat) * Math.PI / 180;
-      const dLon = (customerCoords.lon - vendorCoords.lon) * Math.PI / 180;
-      const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(vendorCoords.lat * Math.PI / 180) * Math.cos(customerCoords.lat * Math.PI / 180) *
-        Math.sin(dLon / 2) * Math.sin(dLon / 2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      const rawDistance = R * c;
-
-      const approximatedDistance = Math.round(rawDistance * 1.3 * 10) / 10;
-      setDistance(approximatedDistance);
-    } catch (err) {
-      console.error("Distance calculation failed in cart:", err);
-      setDistance(5); // Fallback
-    } finally {
-      setDistanceLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (selectedAddress && vendorPincode) {
-      calculateDistance(vendorPincode, selectedAddress.pincode);
-    }
-  }, [selectedAddress, vendorPincode]);
+  }, [selectedAddress]);
 
   const baseCharge = distance !== null ? Math.round(distance * 10) : 50;
-  const shippingCost = baseCharge;
+  const shippingCost = serverDeliveryCharge !== null ? serverDeliveryCharge : baseCharge;
   const tax = 0; // Align with checkout and backend (no tax)
   const finalTotal = cartTotal + shippingCost + tax;
 

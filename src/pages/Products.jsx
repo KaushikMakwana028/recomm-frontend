@@ -15,6 +15,8 @@ import {
 import ProductService from "../services/productService";
 import CategoryService from "../services/categoryService";
 import AlternativeSellers from "../components/AlternativeSellers";
+import NoVendorsEmptyState from "../components/NoVendorsEmptyState";
+import { ProductGridSkeleton } from "../components/SkeletonLoaders";
 import { useCart } from "../context/CartContext";
 import { useWishlist } from "../context/WishlistContext";
 import { formatPrice } from "../utils/helpers";
@@ -48,6 +50,7 @@ const Products = () => {
   const [rawProducts, setRawProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [noNearbyVendors, setNoNearbyVendors] = useState(false);
 
   const [selectedCategoryIds, setSelectedCategoryIds] = useState(() => {
     const ids = searchParams.getAll("category_id");
@@ -117,14 +120,24 @@ const Products = () => {
     return () => document.removeEventListener("keydown", handleKey);
   }, []);
 
-  // Debounce the search box
-  useEffect(() => {
-    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+  const handleSearchChange = (e) => {
+    const value = e.target.value;
+    setSearchInput(value);
+
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+    }
     searchDebounceRef.current = setTimeout(() => {
-      setSearchQuery(searchInput);
+      setSearchQuery(value);
+      const newParams = new URLSearchParams(searchParams);
+      if (value.trim()) {
+        newParams.set("search", value.trim());
+      } else {
+        newParams.delete("search");
+      }
+      setSearchParams(newParams);
     }, 400);
-    return () => clearTimeout(searchDebounceRef.current);
-  }, [searchInput]);
+  };
 
   // Sync category selection with URL search parameters
   useEffect(() => {
@@ -141,14 +154,33 @@ const Products = () => {
     setLoading(true);
     setError("");
 
-    const result = await ProductService.getProductList({ search: searchQuery });
+    let lat = undefined;
+    let lng = undefined;
+    try {
+      const saved = localStorage.getItem("customer_live_location");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.latitude && parsed.longitude) {
+          lat = parsed.latitude;
+          lng = parsed.longitude;
+        }
+      }
+    } catch (e) {}
+
+    const result = await ProductService.getProductList({
+      search: searchQuery,
+      latitude: lat,
+      longitude: lng,
+    });
 
     if (result.success) {
       let data = result.data || [];
       setRawProducts(data);
+      setNoNearbyVendors(Boolean(result.no_nearby_vendors));
     } else {
       setError(result.error || "Failed to load products");
       setRawProducts([]);
+      setNoNearbyVendors(false);
     }
     setLoading(false);
   };
@@ -463,7 +495,7 @@ const Products = () => {
                 className="form-control"
                 placeholder="Search products..."
                 value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
+                onChange={handleSearchChange}
               />
               {searchInput && (
                 <button
@@ -561,28 +593,24 @@ const Products = () => {
         )}
 
         {loading ? (
-          <div className="text-center py-5">
-            <div
-              className="spinner-border"
-              style={{ color: GREEN }}
-              role="status"
-            >
-              <span className="visually-hidden">Loading...</span>
-            </div>
-          </div>
+          <ProductGridSkeleton count={8} />
         ) : filteredProducts.length === 0 ? (
-          <div className="text-center py-5">
-            <h4 className="text-muted">No products found</h4>
-            <p className="text-muted">Try adjusting your filters</p>
-            {hasActiveFilters && (
-              <button
-                className="btn pr-btn-outline mt-2"
-                onClick={handleClearFilters}
-              >
-                <FaTimes className="me-2" /> Clear Filters
-              </button>
-            )}
-          </div>
+          noNearbyVendors ? (
+            <NoVendorsEmptyState />
+          ) : (
+            <div className="text-center py-5">
+              <h4 className="text-muted">No products found</h4>
+              <p className="text-muted">Try adjusting your filters</p>
+              {hasActiveFilters && (
+                <button
+                  className="btn pr-btn-outline mt-2"
+                  onClick={handleClearFilters}
+                >
+                  <FaTimes className="me-2" /> Clear Filters
+                </button>
+              )}
+            </div>
+          )
         ) : viewMode === "grid" ? (
           <div className="row g-3 g-md-4">
             {filteredProducts.map((product) => (

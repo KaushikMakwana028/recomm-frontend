@@ -13,12 +13,17 @@ import {
   FaStore,
   FaShieldAlt,
   FaTruck,
+  FaBolt,
 } from "react-icons/fa";
 import ProductService from "../services/productService";
 import CategoryService from "../services/categoryService";
 import { useCart } from "../context/CartContext";
 import { useWishlist } from "../context/WishlistContext";
 import { formatPrice } from "../utils/helpers";
+import {
+  ProductDetailSkeleton,
+  ProductGridSkeleton,
+} from "../components/SkeletonLoaders";
 
 const NAVY = "#00204E";
 const NAVY_DEEP = "#00152F";
@@ -34,7 +39,7 @@ const DEFAULT_DESCRIPTION =
 const ProductDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { addToCart } = useCart();
+  const { cartItems, addToCart, updateQuantity, removeFromCart } = useCart();
   const { toggleWishlist, isInWishlist } = useWishlist();
 
   const [product, setProduct] = useState(null);
@@ -83,8 +88,17 @@ const ProductDetail = () => {
     setRelatedLoading(false);
   };
 
+  const inCartItem = cartItems?.find((i) => String(i.id) === String(product?.id));
+
   const handleAddToCart = () => {
     addToCart(product, quantity);
+  };
+
+  const handleBuyNow = async () => {
+    if (!inCartItem) {
+      await addToCart(product, quantity, true);
+    }
+    navigate("/cart");
   };
 
   const handleQuantityChange = (change) => {
@@ -95,11 +109,7 @@ const ProductDetail = () => {
   };
 
   if (loading) {
-    return (
-      <div className="pd-loading-screen">
-        <div className="pd-loading-spinner" />
-      </div>
-    );
+    return <ProductDetailSkeleton />;
   }
 
   if (!product) return null;
@@ -252,22 +262,56 @@ const ProductDetail = () => {
         }
 
         /* ---------- CTAs ---------- */
-        .pd-desktop-actions { display: flex; flex-direction: column; gap: 0.65rem; }
+        .pd-desktop-actions { display: flex; align-items: center; gap: 0.75rem; margin-top: 0.5rem; }
         .pd-btn-cta {
-          background: ${GREEN}; color: #fff; border: none; font-weight: 700;
-          border-radius: 12px; padding: 0.85rem 1.25rem; font-size: 0.95rem;
+          flex: 1; height: 48px; background: ${GREEN}; color: #fff; border: none; font-weight: 700;
+          border-radius: 12px; padding: 0 1.25rem; font-size: 0.95rem;
           display: flex; align-items: center; justify-content: center; gap: 0.55rem;
-          cursor: pointer; transition: background 0.18s ease;
+          cursor: pointer; transition: background 0.18s ease, transform 0.15s ease;
         }
-        .pd-btn-cta:hover { background: ${GREEN_DEEP}; }
-        .pd-btn-wish {
-          background: #fff; border: 1.5px solid #f1c3ca; color: #dc3545; font-weight: 700;
-          border-radius: 12px; padding: 0.8rem 1.25rem; font-size: 0.9rem;
+        .pd-btn-cta:hover { background: ${GREEN_DEEP}; transform: translateY(-1px); }
+        .pd-btn-buy {
+          flex: 1; height: 48px; background: linear-gradient(135deg, ${NAVY} 0%, ${NAVY_DEEP} 100%);
+          color: #fff; border: none; font-weight: 700;
+          border-radius: 12px; padding: 0 1.25rem; font-size: 0.95rem;
           display: flex; align-items: center; justify-content: center; gap: 0.55rem;
           cursor: pointer; transition: all 0.18s ease;
+          box-shadow: 0 4px 14px rgba(0, 32, 78, 0.18);
         }
-        .pd-btn-wish:hover { background: #fff5f5; }
-        .pd-btn-wish.active { background: #dc3545; border-color: #dc3545; color: #fff; }
+        .pd-btn-buy:hover { background: linear-gradient(135deg, #002d6e 0%, #001f44 100%); transform: translateY(-1px); }
+        .pd-btn-heart-icon {
+          width: 48px; height: 48px; border-radius: 12px; border: 1.5px solid #e2e8f0;
+          background: #fff; display: flex; align-items: center; justify-content: center;
+          cursor: pointer; flex-shrink: 0; transition: all 0.18s ease;
+        }
+        .pd-btn-heart-icon:hover { background: #fef2f2; border-color: #fecaca; transform: scale(1.05); }
+        .pd-btn-heart-icon.active { background: #fef2f2; border-color: #fca5a5; }
+
+        /* In-cart Stepper Toggle */
+        .pd-incart-toggle {
+          flex: 1; height: 48px; display: flex; align-items: center; justify-content: space-between;
+          background: #f0fdf4; border: 2px solid ${GREEN}; border-radius: 12px; padding: 0 0.4rem;
+        }
+        .pd-incart-btn {
+          width: 38px; height: 38px; border-radius: 8px; border: none;
+          background: #fff; color: ${GREEN_DEEP}; display: flex; align-items: center; justify-content: center;
+          cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,0.08); transition: background 0.15s ease;
+        }
+        .pd-incart-btn:hover:not(:disabled) { background: ${GREEN}; color: #fff; }
+        .pd-incart-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .pd-incart-value { display: flex; flex-direction: column; align-items: center; line-height: 1.1; }
+        .pd-incart-num { font-size: 1.05rem; font-weight: 800; color: ${GREEN_DEEP}; }
+        .pd-incart-sub { font-size: 0.65rem; font-weight: 600; color: #166534; text-transform: uppercase; letter-spacing: 0.04em; }
+
+        /* Image floating heart button */
+        .pd-img-heart-btn {
+          position: absolute; top: 12px; right: 12px; width: 40px; height: 40px; border-radius: 50%;
+          background: rgba(255, 255, 255, 0.92); border: 1px solid #edf2f7;
+          display: flex; align-items: center; justify-content: center; cursor: pointer;
+          box-shadow: 0 3px 10px rgba(0, 32, 78, 0.12); transition: all 0.18s ease; z-index: 5;
+        }
+        .pd-img-heart-btn:hover { transform: scale(1.08); }
+        .pd-img-heart-btn.active { background: #fff; box-shadow: 0 4px 12px rgba(220, 38, 38, 0.2); }
 
         /* ---------- Mobile sticky bar ---------- */
         .pd-mobile-bar {
@@ -275,20 +319,15 @@ const ProductDetail = () => {
           background: #fff; border-top: 1px solid #e7eaf0;
           box-shadow: 0 -6px 20px rgba(0,32,78,0.1);
           padding: 0.65rem 0.9rem; padding-bottom: max(0.65rem, env(safe-area-inset-bottom));
-          display: flex; align-items: center; gap: 0.65rem;
+          display: flex; align-items: center; gap: 0.55rem;
         }
-        .pd-mobile-price { color: ${GREEN_DEEP}; font-weight: 800; font-size: 1.05rem; white-space: nowrap; }
+        .pd-mobile-price { color: ${GREEN_DEEP}; font-weight: 800; font-size: 1rem; white-space: nowrap; }
         .pd-mobile-wish {
-          width: 46px; height: 46px; border-radius: 12px; flex-shrink: 0;
+          width: 42px; height: 42px; border-radius: 12px; flex-shrink: 0;
           border: 1.5px solid #e2e8f0; background: #fff;
           display: flex; align-items: center; justify-content: center; cursor: pointer;
         }
         .pd-mobile-wish.active { border-color: #dc3545; background: #fff5f5; }
-        .pd-mobile-cta {
-          flex: 1; background: ${GREEN}; color: #fff; border: none; font-weight: 700;
-          border-radius: 12px; padding: 0.85rem; font-size: 0.9rem;
-          display: flex; align-items: center; justify-content: center; gap: 0.5rem; cursor: pointer;
-        }
 
         /* ---------- Related products ---------- */
         .pd-related-section { margin-top: 1rem; }
@@ -374,6 +413,15 @@ const ProductDetail = () => {
           <div className="pd-gallery-card">
             <div className="pd-main-img-wrap">
               <img src={images[selectedImage]} alt={product.name} />
+              <button
+                type="button"
+                className={`pd-img-heart-btn ${inWishlist ? "active" : ""}`}
+                onClick={() => toggleWishlist(product)}
+                title={inWishlist ? "Remove from Wishlist" : "Add to Wishlist"}
+                aria-label="Wishlist"
+              >
+                <FaHeart size={18} color={inWishlist ? "#dc2626" : "#64748b"} />
+              </button>
             </div>
 
             {images.length > 1 && (
@@ -489,39 +537,81 @@ const ProductDetail = () => {
               </div>
             )}
 
-            <label className="pd-qty-label">Quantity</label>
-            <div className="pd-qty-stepper">
-              <button
-                className="pd-qty-btn"
-                onClick={() => handleQuantityChange(-1)}
-                disabled={quantity <= 1}
-                aria-label="Decrease quantity"
-              >
-                <FaMinus size={11} />
-              </button>
-              <div className="pd-qty-value">{quantity}</div>
-              <button
-                className="pd-qty-btn"
-                onClick={() => handleQuantityChange(1)}
-                disabled={quantity >= 99}
-                aria-label="Increase quantity"
-              >
-                <FaPlus size={11} />
-              </button>
-            </div>
+            {!inCartItem && (
+              <>
+                <label className="pd-qty-label">Quantity</label>
+                <div className="pd-qty-stepper">
+                  <button
+                    className="pd-qty-btn"
+                    onClick={() => handleQuantityChange(-1)}
+                    disabled={quantity <= 1}
+                    aria-label="Decrease quantity"
+                  >
+                    <FaMinus size={11} />
+                  </button>
+                  <div className="pd-qty-value">{quantity}</div>
+                  <button
+                    className="pd-qty-btn"
+                    onClick={() => handleQuantityChange(1)}
+                    disabled={quantity >= 99}
+                    aria-label="Increase quantity"
+                  >
+                    <FaPlus size={11} />
+                  </button>
+                </div>
+              </>
+            )}
 
             {/* Desktop / tablet actions */}
             <div className="pd-desktop-actions">
-              <button className="pd-btn-cta" onClick={handleAddToCart}>
-                <FaShoppingCart size={14} />
-                Add to Cart
+              {inCartItem ? (
+                <div className="pd-incart-toggle">
+                  <button
+                    className="pd-incart-btn"
+                    onClick={() => {
+                      if (inCartItem.quantity > 1) {
+                        updateQuantity(product.id, inCartItem.quantity - 1);
+                      } else {
+                        removeFromCart(product.id);
+                      }
+                    }}
+                    aria-label="Decrease quantity"
+                  >
+                    <FaMinus size={12} />
+                  </button>
+                  <div className="pd-incart-value">
+                    <span className="pd-incart-num">{inCartItem.quantity}</span>
+                    <span className="pd-incart-sub">in cart</span>
+                  </div>
+                  <button
+                    className="pd-incart-btn"
+                    onClick={() => updateQuantity(product.id, inCartItem.quantity + 1)}
+                    disabled={inCartItem.quantity >= 99}
+                    aria-label="Increase quantity"
+                  >
+                    <FaPlus size={12} />
+                  </button>
+                </div>
+              ) : (
+                <button className="pd-btn-cta" onClick={handleAddToCart}>
+                  <FaShoppingCart size={15} />
+                  Add to Cart
+                </button>
+              )}
+
+              <button className="pd-btn-buy" onClick={handleBuyNow}>
+                <FaBolt size={14} />
+                Buy Now
               </button>
+
               <button
-                className={`pd-btn-wish ${inWishlist ? "active" : ""}`}
+                type="button"
+                className={`pd-btn-heart-icon ${inWishlist ? "active" : ""}`}
                 onClick={() => toggleWishlist(product)}
+                title={inWishlist ? "Remove from Wishlist" : "Add to Wishlist"}
+                aria-label="Wishlist"
               >
-                <FaHeart size={14} />
-                {inWishlist ? "Remove from Wishlist" : "Add to Wishlist"}
+                <FaHeart size={19} color={inWishlist ? "#dc2626" : "#94a3b8"} />
               </button>
             </div>
 
@@ -596,9 +686,7 @@ const ProductDetail = () => {
             </div>
 
             {relatedLoading ? (
-              <div className="pd-related-loading">
-                <div className="pd-loading-spinner" />
-              </div>
+              <ProductGridSkeleton count={4} colClass="col-6 col-md-4 col-lg-3" />
             ) : relatedProducts.length === 0 ? (
               <div className="pd-related-empty">
                 No other products found in this category yet.
@@ -644,16 +732,61 @@ const ProductDetail = () => {
       {/* Mobile sticky action bar */}
       <div className="pd-mobile-bar">
         <button
+          type="button"
           className={`pd-mobile-wish ${inWishlist ? "active" : ""}`}
           onClick={() => toggleWishlist(product)}
           aria-label={inWishlist ? "Remove from wishlist" : "Add to wishlist"}
         >
-          <FaHeart size={17} color={inWishlist ? "#dc3545" : "#94a3b8"} />
+          <FaHeart size={18} color={inWishlist ? "#dc2626" : "#94a3b8"} />
         </button>
         <span className="pd-mobile-price">{formatPrice(product.price)}</span>
-        <button className="pd-mobile-cta" onClick={handleAddToCart}>
-          <FaShoppingCart size={14} />
-          Add to Cart
+        {inCartItem ? (
+          <div className="pd-incart-toggle" style={{ height: "42px", minWidth: "115px" }}>
+            <button
+              className="pd-incart-btn"
+              style={{ width: "32px", height: "32px" }}
+              onClick={() => {
+                if (inCartItem.quantity > 1) {
+                  updateQuantity(product.id, inCartItem.quantity - 1);
+                } else {
+                  removeFromCart(product.id);
+                }
+              }}
+              aria-label="Decrease quantity"
+            >
+              <FaMinus size={10} />
+            </button>
+            <div className="pd-incart-value">
+              <span className="pd-incart-num" style={{ fontSize: "0.95rem" }}>{inCartItem.quantity}</span>
+              <span className="pd-incart-sub" style={{ fontSize: "0.58rem" }}>in cart</span>
+            </div>
+            <button
+              className="pd-incart-btn"
+              style={{ width: "32px", height: "32px" }}
+              onClick={() => updateQuantity(product.id, inCartItem.quantity + 1)}
+              disabled={inCartItem.quantity >= 99}
+              aria-label="Increase quantity"
+            >
+              <FaPlus size={10} />
+            </button>
+          </div>
+        ) : (
+          <button
+            className="pd-btn-cta"
+            style={{ height: "42px", padding: "0 0.85rem", fontSize: "0.85rem" }}
+            onClick={handleAddToCart}
+          >
+            <FaShoppingCart size={13} />
+            Add
+          </button>
+        )}
+        <button
+          className="pd-btn-buy"
+          style={{ height: "42px", padding: "0 0.85rem", fontSize: "0.85rem" }}
+          onClick={handleBuyNow}
+        >
+          <FaBolt size={12} />
+          Buy Now
         </button>
       </div>
     </div>

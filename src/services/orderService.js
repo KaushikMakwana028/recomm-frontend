@@ -65,6 +65,15 @@ const OrderService = {
   },
 
   /**
+   * Hide order from customer history (soft delete for customer only)
+   */
+  hideOrder: async (orderId) => {
+    return call(
+      axiosInstance.post("/hide_order", { order_id: orderId }),
+    );
+  },
+
+  /**
    * Get invoice view URL (PDF)
    */
   getInvoiceUrl: (orderId, explicitUrl) => {

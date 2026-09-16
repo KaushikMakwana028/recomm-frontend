@@ -16,21 +16,40 @@ import {
   FaChevronRight,
   FaFilePdf,
   FaBolt,
+  FaTrashAlt,
+  FaEye,
+  FaCheckCircle,
+  FaClock,
+  FaBox,
+  FaTruck,
+  FaBan,
 } from "react-icons/fa";
 import ProfileService from "../services/profileService";
 import OrderService from "../services/orderService";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
+import { useWishlist } from "../context/WishlistContext";
 import { useOrder } from "../context/OrderContext";
 import { useToast } from "../context/ToastContext";
+import {
+  OrderCardSkeleton,
+  AddressCardSkeleton,
+  ProfileFormSkeleton,
+  ProductGridSkeleton,
+} from "../components/SkeletonLoaders";
 import { formatPrice, formatDate, formatStatus } from "../utils/helpers";
 import LocationPicker from "../components/LocationPicker";
 import "../styles/Profile.css";
 
+const FALLBACK_IMG =
+  "https://images.unsplash.com/photo-1542838132-92c53300491e?w=400";
+
 const Profile = () => {
   const { user, isAuthenticated, logout, updateProfile, fetchProfile } =
     useAuth();
-  const { cartItemCount } = useCart();
+  const { cartItemCount, addToCart } = useCart();
+  const { wishlistItems, removeFromWishlist, loading: wishlistLoading } =
+    useWishlist();
   const { fetchOrders } = useOrder();
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -57,6 +76,8 @@ const Profile = () => {
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [orderStatusFilter, setOrderStatusFilter] = useState("all");
   const [errorMessage, setErrorMessage] = useState("");
+  const [orderToDelete, setOrderToDelete] = useState(null);
+  const [hidingOrder, setHidingOrder] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -334,24 +355,90 @@ const Profile = () => {
     { id: "security", label: "Security", icon: FaLock },
   ];
 
-  const statusBadgeClass = (status) => {
+  const getStatusConfig = (status) => {
     switch (status?.toLowerCase()) {
-      case "pending":
-        return "pf-badge--pending";
-      case "confirmed":
-        return "pf-badge--confirmed";
-      case "processing":
-        return "pf-badge--processing";
-      case "packed":
-        return "pf-badge--packed";
-      case "out_for_delivery":
-        return "pf-badge--out-for-delivery";
       case "delivered":
-        return "pf-badge--delivered";
+        return {
+          label: "Delivered",
+          color: "#16A34A",
+          bg: "#DCFCE7",
+          border: "#BBF7D0",
+          icon: FaCheckCircle,
+        };
+      case "out_for_delivery":
+        return {
+          label: "Out for Delivery",
+          color: "#D97706",
+          bg: "#FEF3C7",
+          border: "#FDE68A",
+          icon: FaTruck,
+        };
+      case "packed":
+        return {
+          label: "Packed",
+          color: "#2563EB",
+          bg: "#DBEAFE",
+          border: "#BFDBFE",
+          icon: FaBox,
+        };
+      case "confirmed":
+        return {
+          label: "Confirmed",
+          color: "#0D9488",
+          bg: "#CCFBF1",
+          border: "#99F6E4",
+          icon: FaCheckCircle,
+        };
+      case "pending":
+        return {
+          label: "Order Placed",
+          color: "#475569",
+          bg: "#F1F5F9",
+          border: "#CBD5E1",
+          icon: FaClock,
+        };
       case "cancelled":
-        return "pf-badge--cancelled";
+        return {
+          label: "Cancelled",
+          color: "#DC2626",
+          bg: "#FEE2E2",
+          border: "#FECACA",
+          icon: FaBan,
+        };
       default:
-        return "pf-badge--warning";
+        return {
+          label: formatStatus(status),
+          color: "#475569",
+          bg: "#F1F5F9",
+          border: "#CBD5E1",
+          icon: FaClock,
+        };
+    }
+  };
+
+  const handleConfirmHideOrder = async () => {
+    if (!orderToDelete) return;
+    setHidingOrder(true);
+    try {
+      const orderIdToHide = orderToDelete.order_id || orderToDelete.id;
+      const res = await OrderService.hideOrder(orderIdToHide);
+      if (res.success) {
+        setOrders((prev) =>
+          prev.filter(
+            (o) =>
+              String(o.id) !== String(orderToDelete.id) &&
+              String(o.order_id) !== String(orderIdToHide)
+          )
+        );
+        showToast("Order removed from your history.", "success");
+        setOrderToDelete(null);
+      } else {
+        showToast(res.error || "Failed to remove order.", "error");
+      }
+    } catch (err) {
+      showToast("Error removing order from history.", "error");
+    } finally {
+      setHidingOrder(false);
     }
   };
 
@@ -505,7 +592,9 @@ const Profile = () => {
                 </div>
 
                 <div className="pf-info-grid">
-                  {!isEditing ? (
+                  {!user ? (
+                    <ProfileFormSkeleton />
+                  ) : !isEditing ? (
                     <div className="pf-info-cols">
                       <div className="pf-info-item">
                         <div className="pf-info-icon">
@@ -636,254 +725,344 @@ const Profile = () => {
             {activeTab === "orders" && (
               <div className="pf-card overflow-hidden">
                 <div className="pf-section-header d-flex flex-wrap align-items-center justify-content-between gap-3">
-                  <h5 className="mb-0">
-                    <FaShoppingBag className="me-2" />
-                    Order History ({orders.length})
-                  </h5>
-                  <div className="d-flex flex-wrap gap-2 align-items-center">
+                  <div className="d-flex align-items-center gap-2">
+                    <FaShoppingBag className="text-brand-green" />
+                    <h5 className="mb-0 fw-bold">Order History</h5>
+                    <span
+                      className="badge rounded-pill"
+                      style={{
+                        backgroundColor: "#F1F5F9",
+                        color: "var(--pf-navy)",
+                        fontSize: "0.8rem",
+                        fontWeight: 700,
+                      }}
+                    >
+                      {orders.length}
+                    </span>
+                  </div>
+
+                  {/* Status filter scrollable pill bar */}
+                  <div
+                    className="d-flex flex-nowrap gap-2 align-items-center overflow-auto py-1"
+                    style={{
+                      maxWidth: "100%",
+                      scrollbarWidth: "none",
+                      msOverflowStyle: "none",
+                    }}
+                  >
                     {[
-                      { key: "all", label: "All" },
+                      { key: "all", label: "All Orders" },
                       { key: "pending", label: "Order Placed" },
                       { key: "confirmed", label: "Confirmed" },
                       { key: "packed", label: "Packed" },
                       { key: "out_for_delivery", label: "Out for Delivery" },
                       { key: "delivered", label: "Delivered" },
                       { key: "cancelled", label: "Cancelled" },
-                    ].map((st) => (
-                      <button
-                        key={st.key}
-                        type="button"
-                        onClick={() => setOrderStatusFilter(st.key)}
-                        style={{
-                          fontSize: "0.75rem",
-                          fontWeight: 600,
-                          padding: "4px 12px",
-                          borderRadius: "999px",
-                          border: orderStatusFilter === st.key ? "1.5px solid var(--pf-green)" : "1.5px solid var(--pf-border)",
-                          background: orderStatusFilter === st.key ? "var(--pf-green-soft)" : "#fff",
-                          color: orderStatusFilter === st.key ? "var(--pf-green-dark)" : "var(--pf-muted)",
-                          cursor: "pointer",
-                          transition: "all 0.15s ease",
-                        }}
-                      >
-                        {st.label}
-                      </button>
-                    ))}
+                    ].map((st) => {
+                      const isActive = orderStatusFilter === st.key;
+                      return (
+                        <button
+                          key={st.key}
+                          type="button"
+                          onClick={() => setOrderStatusFilter(st.key)}
+                          className="btn btn-sm text-nowrap fw-semibold d-inline-flex align-items-center"
+                          style={{
+                            fontSize: "0.78rem",
+                            padding: "6px 14px",
+                            borderRadius: "999px",
+                            border: isActive
+                              ? "1.5px solid var(--pf-green)"
+                              : "1.5px solid #E2E8F0",
+                            backgroundColor: isActive ? "var(--pf-green-soft)" : "#FFFFFF",
+                            color: isActive ? "var(--pf-green-dark)" : "#64748B",
+                            boxShadow: isActive ? "0 2px 8px rgba(52, 161, 41, 0.15)" : "none",
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          {st.label}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
-                <div>
+                <div className="p-3 p-md-4">
                   {ordersLoading ? (
-                    <div className="text-center py-5">
-                      <div
-                        className="spinner-border text-brand-green"
-                        role="status"
-                      >
-                        <span className="visually-hidden">
-                          Loading orders...
-                        </span>
-                      </div>
-                      <p className="text-muted mt-2">Loading your orders...</p>
+                    <div className="d-flex flex-column gap-3 py-2">
+                      <OrderCardSkeleton />
+                      <OrderCardSkeleton />
+                      <OrderCardSkeleton />
                     </div>
                   ) : orders.length === 0 ? (
-                    <div className="pf-empty-state">
-                      <FaShoppingBag size={54} className="mb-3" />
-                      <h5 className="text-muted">
+                    <div className="pf-empty-state py-5 text-center">
+                      <div
+                        className="d-inline-flex align-items-center justify-content-center mb-3"
+                        style={{
+                          width: "72px",
+                          height: "72px",
+                          borderRadius: "50%",
+                          backgroundColor: "#F1F5F9",
+                          color: "#94A3B8",
+                        }}
+                      >
+                        <FaShoppingBag size={32} />
+                      </div>
+                      <h5 className="fw-bold mb-1" style={{ color: "var(--pf-navy)" }}>
                         {orderStatusFilter === "all"
-                          ? "No orders yet"
+                          ? "No orders found"
                           : `No ${orderStatusFilter.replace(/_/g, " ")} orders found`}
                       </h5>
-                      <p className="text-muted mb-3">
+                      <p className="text-muted mb-3" style={{ fontSize: "0.9rem" }}>
                         {orderStatusFilter === "all"
-                          ? "Your order history will appear here"
-                          : "Try selecting a different status filter"}
+                          ? "Looks like you haven't placed any orders yet."
+                          : "Try selecting a different status filter above."}
                       </p>
                       {orderStatusFilter !== "all" ? (
                         <button
                           type="button"
                           onClick={() => setOrderStatusFilter("all")}
-                          className="pf-btn pf-btn--outline"
+                          className="btn btn-outline-secondary btn-sm px-3 py-2 fw-semibold"
+                          style={{ borderRadius: "8px" }}
                         >
                           View All Orders
                         </button>
                       ) : (
-                        <Link to="/products" className="pf-btn pf-btn--solid">
+                        <Link
+                          to="/products"
+                          className="btn btn-sm text-white px-4 py-2 fw-bold"
+                          style={{
+                            backgroundColor: "var(--pf-green)",
+                            borderRadius: "8px",
+                            boxShadow: "0 4px 12px rgba(52, 161, 41, 0.25)",
+                          }}
+                        >
                           Start Shopping
                         </Link>
                       )}
                     </div>
                   ) : (
-                    <>
-                      {/* Desktop table */}
-                      <div className="pf-table-wrap d-none d-md-block">
-                        <table className="pf-table">
-                          <thead>
-                            <tr>
-                              <th>Order ID</th>
-                              <th>Date</th>
-                              <th>Items</th>
-                              <th>Total</th>
-                              <th>Status</th>
-                              <th>Action</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                              {orders.map((order) => (
-                                <tr key={order.id}>
-                                  <td
-                                    className="fw-bold"
-                                    style={{ color: "var(--pf-navy)" }}
-                                  >
-                                    #
-                                    {order.order_number ||
-                                      String(order.id).slice(0, 8)}
-                                    {order.delivery_type === "urgent" && (
-                                      <span
-                                        className="ms-2 badge bg-danger-subtle text-danger border border-danger-subtle d-inline-flex align-items-center"
-                                        style={{ fontSize: "0.68rem" }}
-                                      >
-                                        <FaBolt size={9} className="me-1" /> Urgent
-                                      </span>
-                                    )}
-                                  </td>
-                                  <td>
-                                    <div>{formatDate(order.createdAt)}</div>
-                                    {(order.estimated_window_formatted || order.chosen_time_option) && (
-                                      <small className="text-success d-block fw-semibold" style={{ fontSize: "0.72rem" }}>
-                                        🕒 {order.estimated_window_formatted || `Slot: ${order.chosen_time_option}`}
-                                      </small>
-                                    )}
-                                  </td>
-                                  <td>{order.items?.length || order.total_items || 1} items</td>
-                                  <td
-                                    className="fw-bold"
-                                    style={{ color: "var(--pf-green-dark)" }}
-                                  >
-                                    {formatPrice(order.pricing?.total)}
-                                  </td>
-                                  <td>
-                                    <span
-                                      className={`pf-badge ${statusBadgeClass(order.status)}`}
-                                    >
-                                      {formatStatus(order.status)}
-                                    </span>
-                                  </td>
-                                  <td>
-                                    <div className="d-flex align-items-center gap-2">
-                                      <Link
-                                        to="/order-confirmation"
-                                        state={{ order }}
-                                        className="pf-btn pf-btn--outline pf-btn--sm"
-                                      >
-                                        View
-                                      </Link>
-                                      {order.status?.toLowerCase() === "delivered" ? (
-                                        <a
-                                          href={
-                                            order.invoice_url ||
-                                            OrderService.getInvoiceUrl(order.order_id || order.id)
-                                          }
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="pf-btn pf-btn--bill-pdf pf-btn--sm"
-                                          title="View / Print PDF Bill"
-                                        >
-                                          <FaFilePdf size={11} /> Bill
-                                        </a>
-                                      ) : (
-                                        <span
-                                          className="pf-btn pf-btn--bill-locked pf-btn--sm"
-                                          title="Bill available once delivered"
-                                        >
-                                          <FaLock size={9} /> Bill
-                                        </span>
-                                      )}
-                                    </div>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
+                    <div className="d-flex flex-column gap-3">
+                      {orders.map((order) => {
+                        const statusCfg = getStatusConfig(order.status);
+                        const StatusIcon = statusCfg.icon;
+                        const orderNum = order.order_number || String(order.id);
+                        const isDelivered = ["delivered", "out_for_delivery"].includes(
+                          order.status?.toLowerCase()
+                        );
 
-                        {/* Mobile stacked cards */}
-                        <div className="d-md-none p-3">
-                          {orders.map((order) => (
-                            <div className="pf-order-card" key={order.id}>
-                              <div className="pf-order-card-top">
-                                <span
-                                  className="fw-bold d-flex align-items-center gap-1"
-                                  style={{ color: "var(--pf-navy)" }}
-                                >
-                                  #
-                                  {order.order_number ||
-                                    String(order.id).slice(0, 8)}
-                                  {order.delivery_type === "urgent" && (
-                                    <span
-                                      className="badge bg-danger-subtle text-danger border border-danger-subtle d-inline-flex align-items-center"
-                                      style={{ fontSize: "0.62rem" }}
-                                    >
-                                      <FaBolt size={8} className="me-1" /> Urgent
-                                    </span>
-                                  )}
-                                </span>
-                                <span
-                                  className={`pf-badge ${statusBadgeClass(order.status)}`}
-                                >
-                                  {formatStatus(order.status)}
-                                </span>
-                              </div>
-                              <div className="pf-order-card-meta">
-                                <span>{formatDate(order.createdAt)}</span>
-                                <span>{order.items?.length || order.total_items || 1} items</span>
-                              </div>
-                              {(order.estimated_window_formatted || order.chosen_time_option) && (
-                                <div className="px-3 pb-1" style={{ fontSize: "0.75rem", color: "#137333", fontWeight: 600 }}>
-                                  🕒 {order.estimated_window_formatted || `Slot: ${order.chosen_time_option}`}
-                                </div>
-                              )}
-                              <div className="pf-order-card-footer">
+                        return (
+                          <div
+                            key={order.id}
+                            className="bg-white rounded-3 p-3 p-md-4 position-relative"
+                            style={{
+                              border: "1px solid #E2E8F0",
+                              boxShadow: "0 2px 8px rgba(0, 32, 78, 0.04)",
+                              transition: "box-shadow 0.2s ease, border-color 0.2s ease",
+                            }}
+                          >
+                            {/* Card Top Row: Order ID, Date, Urgent Badge & Status Chip */}
+                            <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 pb-3 mb-3 border-bottom">
+                              <div className="d-flex flex-wrap align-items-center gap-2">
                                 <span
                                   className="fw-bold"
-                                  style={{ color: "var(--pf-green-dark)" }}
+                                  style={{
+                                    color: "var(--pf-navy)",
+                                    fontSize: "1rem",
+                                    letterSpacing: "-0.01em",
+                                  }}
                                 >
-                                  {formatPrice(order.pricing?.total)}
+                                  #{orderNum}
                                 </span>
-                                <div className="d-flex align-items-center gap-2">
-                                  <Link
-                                    to="/order-confirmation"
-                                    state={{ order }}
-                                    className="pf-btn pf-btn--outline pf-btn--sm"
+
+                                {order.delivery_type === "urgent" && (
+                                  <span
+                                    className="badge bg-danger-subtle text-danger border border-danger-subtle d-inline-flex align-items-center py-1 px-2"
+                                    style={{ fontSize: "0.7rem", fontWeight: 700 }}
                                   >
-                                    View
-                                  </Link>
-                                  {order.status?.toLowerCase() === "delivered" ? (
-                                    <a
-                                      href={
-                                        order.invoice_url ||
-                                        OrderService.getInvoiceUrl(order.order_id || order.id)
-                                      }
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="pf-btn pf-btn--bill-pdf pf-btn--sm"
-                                      title="View / Print PDF Bill"
-                                    >
-                                      <FaFilePdf size={11} /> Bill
-                                    </a>
-                                  ) : (
-                                    <span
-                                      className="pf-btn pf-btn--bill-locked pf-btn--sm"
-                                      title="Bill available once delivered"
-                                    >
-                                      <FaLock size={9} /> Bill
+                                    <FaBolt size={10} className="me-1" /> Urgent Delivery
+                                  </span>
+                                )}
+
+                                <span className="text-muted" style={{ fontSize: "0.82rem" }}>
+                                  &bull; {formatDate(order.createdAt)}
+                                </span>
+                              </div>
+
+                              {/* Status Chip */}
+                              <div
+                                className="d-inline-flex align-items-center gap-1.5 px-3 py-1 rounded-pill fw-bold"
+                                style={{
+                                  fontSize: "0.76rem",
+                                  backgroundColor: statusCfg.bg,
+                                  color: statusCfg.color,
+                                  border: `1px solid ${statusCfg.border}`,
+                                }}
+                              >
+                                <StatusIcon size={12} />
+                                <span>{statusCfg.label}</span>
+                              </div>
+                            </div>
+
+                            {/* Card Middle: Summary & Price */}
+                            <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+                              <div className="d-flex align-items-center gap-3">
+                                {order.first_item_image ? (
+                                  <img
+                                    src={order.first_item_image}
+                                    alt="Product"
+                                    className="rounded-3 border object-fit-cover flex-shrink-0"
+                                    style={{ width: "52px", height: "52px" }}
+                                    onError={(e) => {
+                                      e.target.style.display = "none";
+                                    }}
+                                  />
+                                ) : (
+                                  <div
+                                    className="rounded-3 border d-flex align-items-center justify-content-center flex-shrink-0"
+                                    style={{
+                                      width: "52px",
+                                      height: "52px",
+                                      backgroundColor: "#F8FAFC",
+                                      color: "#94A3B8",
+                                    }}
+                                  >
+                                    <FaBox size={20} />
+                                  </div>
+                                )}
+
+                                <div>
+                                  <div
+                                    className="fw-bold text-dark"
+                                    style={{ fontSize: "0.92rem", lineHeight: "1.3" }}
+                                  >
+                                    {order.first_item_name
+                                      ? order.first_item_name
+                                      : `${order.items?.length || order.total_items || 1} item(s)`}
+                                    {order.total_items > 1 && order.first_item_name && (
+                                      <span className="text-muted fw-normal ms-1" style={{ fontSize: "0.82rem" }}>
+                                        +{order.total_items - 1} more item{order.total_items - 1 > 1 ? "s" : ""}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <div className="d-flex flex-wrap align-items-center gap-2 mt-1" style={{ fontSize: "0.8rem", color: "#64748B" }}>
+                                    <span>
+                                      Payment: <strong className="text-secondary text-uppercase">{order.payment_method || "COD"}</strong>
                                     </span>
+                                    <span>&bull;</span>
+                                    <span>
+                                      Delivery: <strong>{parseFloat(order.delivery_charge || 0) > 0 ? formatPrice(order.delivery_charge) : "Free"}</strong>
+                                      {order.distance_km !== undefined && order.distance_km !== null ? ` (${order.distance_km} km)` : ""}
+                                    </span>
+                                  </div>
+
+                                  {(order.estimated_window_formatted || order.chosen_time_option) && (
+                                    <div
+                                      className="d-flex align-items-center gap-1 mt-1 text-success fw-semibold"
+                                      style={{ fontSize: "0.78rem" }}
+                                    >
+                                      <FaClock size={11} />
+                                      <span>{order.estimated_window_formatted || `Slot: ${order.chosen_time_option}`}</span>
+                                    </div>
                                   )}
                                 </div>
                               </div>
+
+                              {/* Price block */}
+                              <div className="text-start text-md-end ms-auto ms-md-0">
+                                <small className="text-muted d-block text-uppercase fw-semibold" style={{ fontSize: "0.68rem" }}>
+                                  Total Amount
+                                </small>
+                                <span
+                                  className="fw-bolder"
+                                  style={{
+                                    fontSize: "1.25rem",
+                                    color: "var(--pf-green-dark)",
+                                  }}
+                                >
+                                  {formatPrice(order.pricing?.total ?? order.total_amount)}
+                                </span>
+                              </div>
                             </div>
-                          ))}
-                        </div>
-                    </>
+
+                            {/* Card Footer: View Details, Bill/Invoice, Delete */}
+                            <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 pt-3 border-top">
+                              {/* Left: Customer delete / remove from history */}
+                              <button
+                                type="button"
+                                onClick={() => setOrderToDelete(order)}
+                                className="btn btn-sm btn-light text-danger d-inline-flex align-items-center gap-1.5 px-2.5 py-1.5 border-0"
+                                style={{
+                                  fontSize: "0.8rem",
+                                  fontWeight: 600,
+                                  backgroundColor: "#FFF1F2",
+                                  borderRadius: "6px",
+                                }}
+                                title="Remove this order from your history"
+                              >
+                                <FaTrashAlt size={12} />
+                                <span>Delete</span>
+                              </button>
+
+                              {/* Right: View Details & Bill actions */}
+                              <div className="d-flex align-items-center gap-2 ms-auto">
+                                <Link
+                                  to="/order-confirmation"
+                                  state={{ order }}
+                                  className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1.5 px-3 py-1.5 fw-semibold"
+                                  style={{
+                                    fontSize: "0.82rem",
+                                    borderRadius: "6px",
+                                    borderColor: "#CBD5E1",
+                                  }}
+                                >
+                                  <FaEye size={12} />
+                                  <span>View</span>
+                                </Link>
+
+                                {isDelivered ? (
+                                  <a
+                                    href={
+                                      order.invoice_url ||
+                                      OrderService.getInvoiceUrl(order.order_id || order.id)
+                                    }
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="btn btn-sm text-white d-inline-flex align-items-center gap-1.5 px-3 py-1.5 fw-bold"
+                                    style={{
+                                      fontSize: "0.82rem",
+                                      borderRadius: "6px",
+                                      backgroundColor: "var(--pf-navy)",
+                                    }}
+                                    title="View / Print Tax Invoice PDF"
+                                  >
+                                    <FaFilePdf size={12} />
+                                    <span>Bill</span>
+                                  </a>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    disabled
+                                    className="btn btn-sm btn-light text-muted d-inline-flex align-items-center gap-1.5 px-3 py-1.5 fw-semibold"
+                                    style={{
+                                      fontSize: "0.82rem",
+                                      borderRadius: "6px",
+                                      border: "1px solid #E2E8F0",
+                                      opacity: 0.65,
+                                      cursor: "not-allowed",
+                                    }}
+                                    title="Bill available once delivered"
+                                  >
+                                    <FaLock size={10} />
+                                    <span>Bill</span>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
               </div>
@@ -1066,11 +1245,9 @@ const Profile = () => {
 
                   {/* Address List */}
                   {addressLoading && editingAddressId === null ? (
-                    <div className="text-center py-4">
-                      <div
-                        className="spinner-border text-brand-green"
-                        role="status"
-                      />
+                    <div className="pf-address-grid">
+                      <AddressCardSkeleton />
+                      <AddressCardSkeleton />
                     </div>
                   ) : addresses.length === 0 && editingAddressId === null ? (
                     <div className="pf-empty-state">
@@ -1141,25 +1318,127 @@ const Profile = () => {
             {/* Wishlist Tab */}
             {activeTab === "wishlist" && (
               <div className="pf-card overflow-hidden">
-                <div className="pf-section-header">
-                  <h5>
-                    <FaHeart className="me-2" />
-                    My Wishlist
-                  </h5>
+                <div className="pf-section-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+                  <div className="d-flex align-items-center gap-2">
+                    <FaHeart className="text-danger" />
+                    <h5 className="mb-0 fw-bold">My Wishlist</h5>
+                    <span
+                      className="badge rounded-pill"
+                      style={{
+                        backgroundColor: "#F1F5F9",
+                        color: "var(--pf-navy)",
+                        fontSize: "0.8rem",
+                        fontWeight: 700,
+                      }}
+                    >
+                      {wishlistItems.length}
+                    </span>
+                  </div>
+                  {wishlistItems.length > 0 && (
+                    <Link
+                      to="/wishlist"
+                      className="btn btn-sm btn-outline-success px-3 fw-semibold"
+                      style={{ borderRadius: "8px" }}
+                    >
+                      Full Wishlist Page
+                    </Link>
+                  )}
                 </div>
-                <div className="pf-empty-state">
-                  <FaHeart
-                    size={44}
-                    className="mb-3"
-                    style={{ color: "#f3d4d4" }}
-                  />
-                  <p className="text-muted mb-3">
-                    View and manage all your saved items on the dedicated
-                    wishlist page.
-                  </p>
-                  <Link to="/wishlist" className="pf-btn pf-btn--solid">
-                    Go to Wishlist
-                  </Link>
+
+                <div className="p-3 p-md-4">
+                  {wishlistLoading ? (
+                    <ProductGridSkeleton count={4} colClass="col-6 col-md-4 col-lg-3" />
+                  ) : wishlistItems.length === 0 ? (
+                    <div className="pf-empty-state py-5 text-center">
+                      <FaHeart
+                        size={44}
+                        className="mb-3"
+                        style={{ color: "#f3d4d4" }}
+                      />
+                      <h5 className="fw-bold mb-1" style={{ color: "var(--pf-navy)" }}>
+                        Your wishlist is empty
+                      </h5>
+                      <p className="text-muted mb-3" style={{ fontSize: "0.9rem" }}>
+                        Save your favorite products to buy them later!
+                      </p>
+                      <Link to="/products" className="pf-btn pf-btn--solid">
+                        Discover Products
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="row g-3">
+                      {wishlistItems.map((item) => (
+                        <div key={item.id} className="col-6 col-md-4 col-lg-3">
+                          <div
+                            className="bg-white rounded-3 overflow-hidden h-100 d-flex flex-column"
+                            style={{
+                              border: "1px solid #E2E8F0",
+                              boxShadow: "0 2px 8px rgba(0, 32, 78, 0.04)",
+                            }}
+                          >
+                            <div
+                              className="position-relative"
+                              style={{ aspectRatio: "1/1", background: "#f8fafc" }}
+                            >
+                              <Link to={`/product/${item.id}`}>
+                                <img
+                                  src={item.image || item.image_url || FALLBACK_IMG}
+                                  alt={item.name}
+                                  className="w-100 h-100 object-fit-contain p-2"
+                                  onError={(e) => {
+                                    e.target.src = FALLBACK_IMG;
+                                  }}
+                                />
+                              </Link>
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-light position-absolute top-0 end-0 m-2 rounded-circle shadow-sm d-flex align-items-center justify-content-center p-0"
+                                style={{ width: "28px", height: "28px" }}
+                                onClick={() => removeFromWishlist(item.id)}
+                                title="Remove from wishlist"
+                              >
+                                <FaTrashAlt size={11} className="text-danger" />
+                              </button>
+                            </div>
+                            <div className="p-2.5 d-flex flex-column flex-grow-1 justify-content-between">
+                              <div>
+                                <Link
+                                  to={`/product/${item.id}`}
+                                  className="text-decoration-none fw-bold d-block text-truncate mb-1"
+                                  style={{ color: "var(--pf-navy)", fontSize: "0.85rem" }}
+                                  title={item.name}
+                                >
+                                  {item.name}
+                                </Link>
+                                <div
+                                  className="fw-bold"
+                                  style={{ color: "var(--pf-green)", fontSize: "0.92rem" }}
+                                >
+                                  {formatPrice(item.price)}
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                className="btn btn-sm text-white w-100 mt-2 d-flex align-items-center justify-content-center gap-1 fw-semibold"
+                                style={{
+                                  backgroundColor: "var(--pf-green)",
+                                  borderRadius: "6px",
+                                  fontSize: "0.78rem",
+                                  padding: "0.45rem",
+                                }}
+                                onClick={() => {
+                                  addToCart(item, 1);
+                                  removeFromWishlist(item.id);
+                                }}
+                              >
+                                <FaShoppingBag size={11} /> Move to Cart
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1239,6 +1518,82 @@ const Profile = () => {
           </div>
         </div>
       </div>
+
+      {/* Delete / Hide Order Confirmation Modal */}
+      {orderToDelete && (
+        <div
+          className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+          style={{
+            backgroundColor: "rgba(0, 32, 78, 0.45)",
+            zIndex: 1050,
+            backdropFilter: "blur(2px)",
+            padding: "1rem",
+          }}
+        >
+          <div
+            className="bg-white rounded-3 shadow-lg p-4"
+            style={{ maxWidth: "440px", width: "100%", border: "1px solid #E2E8F0" }}
+          >
+            <div className="d-flex align-items-center gap-3 mb-3">
+              <div
+                className="d-flex align-items-center justify-content-center flex-shrink-0"
+                style={{
+                  width: "44px",
+                  height: "44px",
+                  borderRadius: "50%",
+                  backgroundColor: "#FEE2E2",
+                  color: "#DC2626",
+                }}
+              >
+                <FaTrashAlt size={18} />
+              </div>
+              <div>
+                <h5 className="mb-0 fw-bold" style={{ color: "var(--pf-navy)" }}>
+                  Remove Order from History?
+                </h5>
+                <small className="text-muted">
+                  Order #{orderToDelete.order_number || orderToDelete.id}
+                </small>
+              </div>
+            </div>
+
+            <p className="text-secondary mb-4" style={{ fontSize: "0.92rem", lineHeight: "1.5" }}>
+              Remove this order from your history? This won't cancel or delete the actual order.
+            </p>
+
+            <div className="d-flex justify-content-end gap-2">
+              <button
+                type="button"
+                disabled={hidingOrder}
+                onClick={() => setOrderToDelete(null)}
+                className="btn btn-light px-3 py-2 fw-semibold"
+                style={{ border: "1px solid #CBD5E1", fontSize: "0.88rem" }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={hidingOrder}
+                onClick={handleConfirmHideOrder}
+                className="btn btn-danger px-3 py-2 fw-semibold d-inline-flex align-items-center gap-2"
+                style={{ fontSize: "0.88rem" }}
+              >
+                {hidingOrder ? (
+                  <>
+                    <span className="spinner-border spinner-border-sm" role="status" />
+                    <span>Removing...</span>
+                  </>
+                ) : (
+                  <>
+                    <FaTrashAlt size={13} />
+                    <span>Remove from History</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -16,6 +16,8 @@ const Signup = lazy(() => import("./pages/Signup"));
 const Profile = lazy(() => import("./pages/Profile"));
 const Wishlist = lazy(() => import("./pages/Wishlist"));
 const Search = lazy(() => import("./pages/Search"));
+const LegalPage = lazy(() => import("./pages/LegalPage"));
+
 
 // Full-page Loading Spinner
 const PageLoader = () => (
@@ -176,6 +178,43 @@ const AppRouter = () => {
           element={
             <Layout>
               <Categories />
+            </Layout>
+          }
+        />
+
+        {/* ── Public Legal & Policy Pages ──────────────────── */}
+        <Route
+          path="/terms-conditions"
+          element={
+            <Layout>
+              <LegalPage defaultSlug="terms_conditions" />
+            </Layout>
+          }
+        />
+
+        <Route
+          path="/privacy-policy"
+          element={
+            <Layout>
+              <LegalPage defaultSlug="privacy_policy" />
+            </Layout>
+          }
+        />
+
+        <Route
+          path="/refund-policy"
+          element={
+            <Layout>
+              <LegalPage defaultSlug="refund_policy" />
+            </Layout>
+          }
+        />
+
+        <Route
+          path="/legal/:slug"
+          element={
+            <Layout>
+              <LegalPage />
             </Layout>
           }
         />
