@@ -4,10 +4,11 @@ const OrderService = {
   /**
    * Calculate live delivery charge from server using coordinates
    */
-  calculateDeliveryCharge: async ({ addressId, deliveryType = "normal" } = {}) => {
+  calculateDeliveryCharge: async ({ addressId, chosenTimeOption = "later", deliveryType = "normal" } = {}) => {
     return call(
       axiosInstance.post("/calculate_delivery_charge", {
         address_id: addressId,
+        chosen_time_option: chosenTimeOption,
         delivery_type: deliveryType,
       })
     );
@@ -22,7 +23,7 @@ const OrderService = {
     deliveryCharge = 0,
     deliveryType = "normal",
     distance = null,
-    chosenTimeOption = "immediately",
+    chosenTimeOption = "later",
     customDeliveryTime = null,
   }) => {
     return call(
@@ -88,6 +89,28 @@ const OrderService = {
   getInvoiceDownloadUrl: (orderId, explicitUrl) => {
     const url = OrderService.getInvoiceUrl(orderId, explicitUrl);
     return url.includes("?") ? `${url}&download=1` : `${url}?download=1`;
+  },
+
+  /**
+   * Submit customer support request for an order
+   */
+  createSupportRequest: async ({ orderId, category, description }) => {
+    return call(
+      axiosInstance.post("/create_support_request", {
+        order_id: orderId,
+        category,
+        description,
+      })
+    );
+  },
+
+  /**
+   * Get all support requests for an order
+   */
+  getOrderSupportRequests: async (orderId) => {
+    return call(
+      axiosInstance.get(`/get_order_support_requests/${orderId}`)
+    );
   },
 };
 

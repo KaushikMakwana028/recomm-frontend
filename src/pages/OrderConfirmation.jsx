@@ -14,11 +14,13 @@ import {
   FaLock,
   FaBolt,
   FaInfoCircle,
+  FaHeadset,
 } from "react-icons/fa";
 import { formatPrice, formatDate, getImageUrl, formatStatus } from "../utils/helpers";
 import { useOrder } from "../context/OrderContext";
 import { useProducts } from "../context/ProductContext";
 import OrderService from "../services/orderService";
+import OrderSupportModal from "../components/OrderSupportModal";
 import "../styles/OrderConfirmation.css";
 
 const STATUS_STEPS = [
@@ -38,6 +40,9 @@ const OrderConfirmation = () => {
   const [orderData, setOrderData] = useState(location.state?.order || null);
   const [apiLoading, setApiLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [supportModalOpen, setSupportModalOpen] = useState(false);
+  const [supportRequests, setSupportRequests] = useState([]);
+  const [loadingSupport, setLoadingSupport] = useState(false);
 
   const loadOrderDetails = useCallback(
     async (orderId) => {
@@ -84,6 +89,27 @@ const OrderConfirmation = () => {
     }
     window.scrollTo(0, 0);
   }, [orderData, navigate, loadOrderDetails]);
+
+  const targetOrderId = orderData?.order_id || orderData?.id || orderData?.rawOrderId;
+
+  const loadSupportRequests = useCallback(async () => {
+    if (!targetOrderId) return;
+    try {
+      setLoadingSupport(true);
+      const res = await OrderService.getOrderSupportRequests(targetOrderId);
+      if (res && res.success && res.data?.requests) {
+        setSupportRequests(res.data.requests);
+      }
+    } catch (e) {
+      console.error("Failed to load support requests:", e);
+    } finally {
+      setLoadingSupport(false);
+    }
+  }, [targetOrderId]);
+
+  useEffect(() => {
+    loadSupportRequests();
+  }, [loadSupportRequests]);
 
   const isFullOrder =
     orderData &&
@@ -177,6 +203,8 @@ const OrderConfirmation = () => {
           price: item.price,
           quantity: item.quantity,
           category: item.category || productMatch?.category_name || "",
+          store_name: item.store_name || item.vendor_name || "",
+          vendor_id: item.vendor_id || productMatch?.vendor_id || "",
         };
       }) || [],
   };
@@ -268,7 +296,7 @@ const OrderConfirmation = () => {
                   Thank you for your purchase. Your order has been received.
                 </p>
 
-                <div className="oc-order-chip">
+                <div className="oc-order-chip d-flex align-items-center justify-content-center gap-2 flex-wrap">
                   <span className="oc-order-id">Order #{order.id}</span>
                   <button
                     type="button"
@@ -278,6 +306,24 @@ const OrderConfirmation = () => {
                     title="Copy order number"
                   >
                     {copied ? <FaCheck size={13} /> : <FaRegCopy size={13} />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSupportModalOpen(true)}
+                    className="btn btn-sm text-white d-inline-flex align-items-center gap-1.5 ms-2 px-2.5 py-1"
+                    style={{
+                      background: "linear-gradient(135deg, #16a34a, #15803d)",
+                      borderRadius: "999px",
+                      fontSize: "0.78rem",
+                      fontWeight: 700,
+                      border: "none",
+                      boxShadow: "0 2px 6px rgba(22, 163, 74, 0.3)",
+                      cursor: "pointer",
+                    }}
+                    title="Report issue with this order"
+                  >
+                    <FaHeadset size={12} />
+                    <span>Need Help?</span>
                   </button>
                 </div>
 
@@ -378,34 +424,6 @@ const OrderConfirmation = () => {
                       </span>
                     </div>
 
-                    <div className="oc-detail-row">
-                      <span className="oc-label">Delivery Type</span>
-                      <span className="oc-value">
-                        {isUrgent ? (
-                          <span className="oc-urgent-tag">
-                            <FaBolt size={10} className="me-1" />
-                            Urgent (Within 24 Hours)
-                          </span>
-                        ) : (
-                          <span className="oc-normal-tag">
-                            Normal (3-5 Business Days)
-                          </span>
-                        )}
-                      </span>
-                    </div>
-
-                    {(order.deliveryOption || order.distance) && (
-                      <div className="oc-detail-row">
-                        <span className="oc-label">Delivery Mode</span>
-                        <span className="oc-value">
-                          {order.deliveryOption === "self"
-                            ? "By Self"
-                            : "Delivery Partner"}
-                          {order.distance ? ` (${order.distance} KM)` : ""}
-                        </span>
-                      </div>
-                    )}
-
                     {(order.chosenTimeOption || orderData.chosen_time_option) && (
                       <div className="oc-detail-row">
                         <span className="oc-label">Time Slot</span>
@@ -413,10 +431,19 @@ const OrderConfirmation = () => {
                           className="oc-value text-capitalize fw-bold"
                           style={{ color: "#00204E" }}
                         >
-                          {order.chosenTimeOption || orderData.chosen_time_option}
+                          {(order.chosenTimeOption || orderData.chosen_time_option) === "immediately" ? "⚡ Immediately" : (order.chosenTimeOption || orderData.chosen_time_option)}
                         </span>
                       </div>
                     )}
+
+                    {order.distance ? (
+                      <div className="oc-detail-row">
+                        <span className="oc-label">Distance</span>
+                        <span className="oc-value">
+                          {order.distance} KM
+                        </span>
+                      </div>
+                    ) : null}
 
                     {(order.estimatedWindowFormatted ||
                       orderData.estimated_window_formatted ||
@@ -487,6 +514,27 @@ const OrderConfirmation = () => {
                             />
                             <div>
                               <p className="oc-item-name mb-0">{item.name}</p>
+                              {item.store_name && (
+                                <div className="mt-1">
+                                  <Link
+                                    to={item.vendor_id ? `/store/${item.vendor_id}` : "#"}
+                                    className="badge px-2 py-0.5 rounded-pill text-decoration-none"
+                                    style={{
+                                      backgroundColor: "#f1f5f9",
+                                      color: "#00204E",
+                                      border: "1px solid #cbd5e1",
+                                      fontSize: "0.74rem",
+                                      fontWeight: 600,
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "4px",
+                                    }}
+                                    title={`Sold by ${item.store_name} - Click to visit store`}
+                                  >
+                                    🏪 {item.store_name}
+                                  </Link>
+                                </div>
+                              )}
                               <small className="oc-item-cat">
                                 {item.category}
                               </small>
@@ -518,6 +566,27 @@ const OrderConfirmation = () => {
                     />
                     <div className="oc-item-card-meta">
                       <p className="oc-item-name mb-0">{item.name}</p>
+                      {item.store_name && (
+                        <div className="my-1">
+                          <Link
+                            to={item.vendor_id ? `/store/${item.vendor_id}` : "#"}
+                            className="badge px-2 py-0.5 rounded-pill text-decoration-none"
+                            style={{
+                              backgroundColor: "#f1f5f9",
+                              color: "#00204E",
+                              border: "1px solid #cbd5e1",
+                              fontSize: "0.72rem",
+                              fontWeight: 600,
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                            }}
+                            title={`Sold by ${item.store_name} - Click to visit store`}
+                          >
+                            🏪 {item.store_name}
+                          </Link>
+                        </div>
+                      )}
                       <small className="oc-item-cat">{item.category}</small>
                       <div className="oc-item-card-footer">
                         <span className="oc-qty">
@@ -575,6 +644,161 @@ const OrderConfirmation = () => {
               </div>
             </div>
 
+            {/* Support & Issue Resolution Section */}
+            <div className="oc-card mb-4">
+              <div className="oc-card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <div className="d-flex align-items-center gap-2">
+                  <FaHeadset className="text-success" />
+                  <span className="fw-bold">Customer Support &amp; Issue Resolution</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSupportModalOpen(true)}
+                  className="btn btn-sm btn-success text-white fw-bold d-inline-flex align-items-center gap-1.5 px-3 py-1"
+                  style={{
+                    backgroundColor: "#16a34a",
+                    borderColor: "#16a34a",
+                    borderRadius: "8px",
+                    fontSize: "0.8rem",
+                  }}
+                >
+                  <FaHeadset size={12} />
+                  <span>Report an Issue</span>
+                </button>
+              </div>
+              <div className="p-3 p-md-4">
+                {loadingSupport ? (
+                  <div className="text-center py-3 text-muted">
+                    <div className="spinner-border spinner-border-sm me-2" role="status" />
+                    Checking support requests...
+                  </div>
+                ) : supportRequests.length > 0 ? (
+                  <div className="d-flex flex-column gap-3">
+                    {supportRequests.map((req) => (
+                      <div
+                        key={req.id}
+                        className="p-3 rounded-3 border"
+                        style={{ backgroundColor: "#f8fafc", borderColor: "#e2e8f0" }}
+                      >
+                        <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+                          <div className="d-flex align-items-center gap-2 flex-wrap">
+                            <span className="fw-bold text-dark font-monospace" style={{ fontSize: "0.92rem" }}>
+                              #{req.ticket_number}
+                            </span>
+                            <span
+                              className="badge"
+                              style={{
+                                backgroundColor: "#e0f2fe",
+                                color: "#0369a1",
+                                border: "1px solid #bae6fd",
+                                fontSize: "0.75rem",
+                              }}
+                            >
+                              {req.category}
+                            </span>
+                          </div>
+                          <div>
+                            {req.status === "Open" && (
+                              <span
+                                className="badge fw-bold"
+                                style={{
+                                  backgroundColor: "#fef3c7",
+                                  color: "#92400e",
+                                  border: "1px solid #fde68a",
+                                }}
+                              >
+                                Open
+                              </span>
+                            )}
+                            {req.status === "In Progress" && (
+                              <span
+                                className="badge fw-bold"
+                                style={{
+                                  backgroundColor: "#e0e7ff",
+                                  color: "#3730a3",
+                                  border: "1px solid #c7d2fe",
+                                }}
+                              >
+                                In Progress
+                              </span>
+                            )}
+                            {req.status === "Resolved" && (
+                              <span
+                                className="badge fw-bold"
+                                style={{
+                                  backgroundColor: "#dcfce7",
+                                  color: "#166534",
+                                  border: "1px solid #bbf7d0",
+                                }}
+                              >
+                                Resolved
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <p className="mb-2 text-secondary" style={{ fontSize: "0.88rem", whiteSpace: "pre-wrap" }}>
+                          {req.description}
+                        </p>
+
+                        {/* Good message reflecting status */}
+                        {req.status === "Resolved" && (
+                          <div
+                            className="p-2.5 px-3 rounded-2 mb-2 d-flex align-items-center gap-2"
+                            style={{ backgroundColor: "#f0fdf4", border: "1px solid #bbf7d0", color: "#166534", fontSize: "0.83rem" }}
+                          >
+                            <span>🎉 <strong>Issue Resolved:</strong> Thank you so much for your patience and cooperation while our team resolved your concern. We truly appreciate you!</span>
+                          </div>
+                        )}
+                        {req.status === "In Progress" && (
+                          <div
+                            className="p-2.5 px-3 rounded-2 mb-2 d-flex align-items-center gap-2"
+                            style={{ backgroundColor: "#eff6ff", border: "1px solid #bfdbfe", color: "#1e40af", fontSize: "0.83rem" }}
+                          >
+                            <span>⏳ <strong>In Progress:</strong> Our support team is actively working on resolving your request. Thank you so much for your patience!</span>
+                          </div>
+                        )}
+                        {req.status === "Open" && (
+                          <div
+                            className="p-2.5 px-3 rounded-2 mb-2 d-flex align-items-center gap-2"
+                            style={{ backgroundColor: "#fffbeb", border: "1px solid #fde68a", color: "#92400e", fontSize: "0.83rem" }}
+                          >
+                            <span>📨 <strong>Request Received:</strong> Our team is reviewing your order details. Thank you for your patience — we will update you shortly!</span>
+                          </div>
+                        )}
+
+                        {req.admin_response && (
+                          <div
+                            className="mt-2 p-3 rounded-2"
+                            style={{ backgroundColor: "#ecfdf5", borderLeft: "4px solid #10b981" }}
+                          >
+                            <div className="fw-bold text-success mb-1" style={{ fontSize: "0.82rem" }}>
+                              Support Team Response:
+                            </div>
+                            <div className="text-dark" style={{ fontSize: "0.86rem" }}>
+                              {req.admin_response}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="text-muted text-end mt-2" style={{ fontSize: "0.75rem" }}>
+                          Submitted: {new Date(req.created_at).toLocaleString()}
+                          {req.resolved_at && ` • Resolved: ${new Date(req.resolved_at).toLocaleString()}`}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-3 text-muted" style={{ fontSize: "0.88rem" }}>
+                    <p className="mb-1">No support requests reported for this order.</p>
+                    <p className="mb-0 text-secondary small">
+                      Need help with payment, missing items, damaged delivery, or anything else? Click <strong>"Report an Issue"</strong> above.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Action Buttons */}
             <div className="oc-actions-wrapper">
               <div className="oc-actions">
@@ -611,6 +835,15 @@ const OrderConfirmation = () => {
                   )}
                 </div>
 
+                <button
+                  type="button"
+                  onClick={() => setSupportModalOpen(true)}
+                  className="oc-btn oc-btn--outline"
+                  title="Need Help with this order?"
+                >
+                  <FaHeadset /> Need Help?
+                </button>
+
                 <Link to="/profile?tab=orders" className="oc-btn oc-btn--outline">
                   <FaShoppingBag /> Track Order
                 </Link>
@@ -639,6 +872,14 @@ const OrderConfirmation = () => {
           </div>
         </div>
       </div>
+
+      {/* Order Support Modal */}
+      <OrderSupportModal
+        order={order}
+        isOpen={supportModalOpen}
+        onClose={() => setSupportModalOpen(false)}
+        onSuccess={() => loadSupportRequests()}
+      />
     </div>
   );
 };

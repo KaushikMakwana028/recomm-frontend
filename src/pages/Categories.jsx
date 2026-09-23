@@ -5,6 +5,8 @@ import {
   FaHeart,
   FaArrowLeft,
   FaThLarge,
+  FaSearch,
+  FaTimes,
 } from "react-icons/fa";
 import CategoryService from "../services/categoryService";
 import NoVendorsEmptyState from "../components/NoVendorsEmptyState";
@@ -15,6 +17,7 @@ import {
 import { useCart } from "../context/CartContext";
 import { useWishlist } from "../context/WishlistContext";
 import { formatPrice } from "../utils/helpers";
+import { getStockInfo } from "../utils/stockUtils";
 
 const NAVY = "#00204E";
 const GREEN = "#34A129";
@@ -33,6 +36,7 @@ const Categories = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [noNearbyVendors, setNoNearbyVendors] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Always load the category list (used for sidebar / grid)
   useEffect(() => {
@@ -52,10 +56,30 @@ const Categories = () => {
   const loadCategories = async () => {
     const result = await CategoryService.getCategoryList();
     if (result.success) {
-      setCategories(result.data || []);
+      const raw = result.data || [];
+      const sorted = [...raw].sort((a, b) => {
+        const aHas = (Number(a.product_count) > 0 || a.has_products) ? 1 : 0;
+        const bHas = (Number(b.product_count) > 0 || b.has_products) ? 1 : 0;
+        if (aHas !== bHas) return bHas - aHas;
+        if (Number(a.product_count) !== Number(b.product_count)) {
+          return Number(b.product_count) - Number(a.product_count);
+        }
+        return Number(a.id) - Number(b.id);
+      });
+      setCategories(sorted);
     }
     if (!id) setLoading(false);
   };
+
+  const filteredCategories = categories.filter((cat) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.trim().toLowerCase();
+    return (
+      (cat.name && cat.name.toLowerCase().includes(q)) ||
+      (cat.slug && cat.slug.toLowerCase().includes(q)) ||
+      (cat.description && cat.description.toLowerCase().includes(q))
+    );
+  });
 
   const loadCategoryProducts = async (categoryId) => {
     setLoading(true);
@@ -86,7 +110,22 @@ const Categories = () => {
     }
 
     if (productsResult.success) {
-      setProducts(productsResult.data || []);
+      const raw = productsResult.data || [];
+      const sorted = [...raw].sort((a, b) => {
+        const aInfo = getStockInfo(a);
+        const bInfo = getStockInfo(b);
+        const aUnavail =
+          !aInfo.canAddToCart ||
+          aInfo.state === "out_of_stock" ||
+          aInfo.state === "temporarily_unavailable";
+        const bUnavail =
+          !bInfo.canAddToCart ||
+          bInfo.state === "out_of_stock" ||
+          bInfo.state === "temporarily_unavailable";
+        if (aUnavail !== bUnavail) return aUnavail ? 1 : -1;
+        return (b.id || 0) - (a.id || 0);
+      });
+      setProducts(sorted);
       setNoNearbyVendors(Boolean(productsResult.no_nearby_vendors));
     } else {
       setNoNearbyVendors(false);
@@ -112,6 +151,86 @@ const Categories = () => {
         .cp-hero { text-align: center; margin-bottom: 2.25rem; }
         .cp-hero h2 { color: ${NAVY}; font-weight: 800; margin-bottom: 0.35rem; }
         .cp-hero p { color: #6c7a90; }
+
+        /* Category Search Bar */
+        .cp-search-box-wrap {
+          max-width: 540px;
+          margin: 1.5rem auto 0;
+        }
+        .cp-search-form {
+          position: relative;
+          display: flex;
+          align-items: center;
+          background: #ffffff;
+          border: 2px solid #E2E8F0;
+          border-radius: 50px;
+          padding: 4px 6px 4px 18px;
+          box-shadow: 0 4px 18px rgba(0, 32, 78, 0.08);
+          transition: border-color .2s ease, box-shadow .2s ease;
+        }
+        .cp-search-form:focus-within {
+          border-color: ${GREEN};
+          box-shadow: 0 6px 24px rgba(52, 161, 41, 0.18);
+        }
+        .cp-search-icon {
+          color: #94A3B8;
+          font-size: 1rem;
+          margin-right: 10px;
+          flex-shrink: 0;
+        }
+        .cp-search-input {
+          flex: 1;
+          border: none;
+          outline: none;
+          background: transparent;
+          font-size: 0.94rem;
+          color: ${NAVY};
+          font-family: inherit;
+          padding: 0.45rem 0;
+        }
+        .cp-search-input::placeholder {
+          color: #94A3B8;
+          font-size: 0.88rem;
+        }
+        .cp-clear-btn {
+          background: none;
+          border: none;
+          color: #94A3B8;
+          padding: 4px 8px;
+          cursor: pointer;
+          font-size: 0.85rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .cp-clear-btn:hover {
+          color: ${NAVY};
+        }
+        .cp-search-btn {
+          background: ${GREEN};
+          color: #fff;
+          border: none;
+          border-radius: 50px;
+          padding: 0.55rem 1.35rem;
+          font-weight: 700;
+          font-size: 0.88rem;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          flex-shrink: 0;
+        }
+        .cp-search-btn:hover {
+          background: #278420;
+          color: #fff;
+          transform: translateY(-1px);
+        }
+        .cp-search-info {
+          margin-top: 0.55rem;
+          font-size: 0.82rem;
+          color: #64748B;
+        }
 
         .cp-tile {
           position: relative;
@@ -230,6 +349,48 @@ const Categories = () => {
             <div className="cp-hero">
               <h2>Shop by Category</h2>
               <p className="mb-0">Browse our full range of categories</p>
+
+              {/* Search Category Bar with Search Button */}
+              <div className="cp-search-box-wrap">
+                <form
+                  onSubmit={(e) => e.preventDefault()}
+                  className="cp-search-form"
+                >
+                  <FaSearch className="cp-search-icon" />
+                  <input
+                    type="text"
+                    className="cp-search-input"
+                    placeholder="Search categories (e.g. Beverages, Fruits, Staples)..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    aria-label="Search categories"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      className="cp-clear-btn"
+                      onClick={() => setSearchQuery("")}
+                      title="Clear search"
+                    >
+                      <FaTimes size={13} />
+                    </button>
+                  )}
+                  <button
+                    type="submit"
+                    className="cp-search-btn"
+                    onClick={(e) => e.preventDefault()}
+                  >
+                    <FaSearch size={12} />
+                    <span>Search</span>
+                  </button>
+                </form>
+
+                {searchQuery && (
+                  <div className="cp-search-info">
+                    Showing {filteredCategories.length} of {categories.length} categories matching "<strong>{searchQuery}</strong>"
+                  </div>
+                )}
+              </div>
             </div>
 
             {loading ? (
@@ -239,28 +400,53 @@ const Categories = () => {
                 <FaThLarge size={44} className="text-muted mb-3" />
                 <h5 className="text-muted">No categories found</h5>
               </div>
+            ) : filteredCategories.length === 0 ? (
+              <div className="text-center py-5">
+                <FaSearch size={36} className="text-muted mb-3 opacity-50" />
+                <h5 className="text-dark fw-bold mb-1">No categories match "{searchQuery}"</h5>
+                <p className="text-muted mb-3">Try checking for typos or searching a different keyword.</p>
+                <button
+                  type="button"
+                  className="btn cp-btn-outline btn-sm px-3"
+                  onClick={() => setSearchQuery("")}
+                >
+                  Clear Search
+                </button>
+              </div>
             ) : (
               <div className="row g-3 g-md-4">
-                {categories.map((category) => (
-                  <div key={category.id} className="col-6 col-md-4 col-lg-3">
-                    <Link to={`/categories/${category.id}`} className="cp-tile">
-                      <img
-                        src={category.image_url || FALLBACK_IMG}
-                        alt={category.name}
-                        loading="lazy"
-                      />
-                      <div className="cp-tile-overlay" />
-                      <div className="cp-tile-label">
-                        {category.name}
-                        {typeof category.product_count === "number" && (
-                          <span className="cp-tile-count d-block">
-                            {category.product_count} items
-                          </span>
-                        )}
-                      </div>
-                    </Link>
-                  </div>
-                ))}
+                {filteredCategories.map((category) => {
+                  const hasProds = Number(category.product_count) > 0;
+                  return (
+                    <div key={category.id} className="col-6 col-md-4 col-lg-3">
+                      <Link to={`/categories/${category.id}`} className="cp-tile">
+                        <img
+                          src={category.image_url || FALLBACK_IMG}
+                          alt={category.name}
+                          loading="lazy"
+                        />
+                        <div className="cp-tile-overlay" />
+                        <div className="cp-tile-label">
+                          <div>{category.name}</div>
+                          {typeof category.product_count === "number" && (
+                            <span
+                              className="cp-tile-count d-inline-block"
+                              style={{
+                                color: hasProds ? "#86efac" : "rgba(255,255,255,0.65)",
+                                fontWeight: hasProds ? 600 : 400,
+                                fontSize: "0.75rem",
+                              }}
+                            >
+                              {hasProds
+                                ? `${category.product_count} ${category.product_count === 1 ? "item" : "items"}`
+                                : "No products"}
+                            </span>
+                          )}
+                        </div>
+                      </Link>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </>

@@ -7,6 +7,7 @@ import {
   FaMoneyBillWave,
   FaPlus,
   FaClock,
+  FaStore,
 } from "react-icons/fa";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
@@ -14,11 +15,18 @@ import { useOrder } from "../context/OrderContext";
 import { useToast } from "../context/ToastContext";
 import ProfileService from "../services/profileService";
 import OrderService from "../services/orderService";
-import { formatPrice } from "../utils/helpers";
+import { formatPrice, getImageUrl } from "../utils/helpers";
 import "../styles/Checkout.css";
 
 const Checkout = () => {
-  const { cartItems, cartTotal, refreshCart, deliveryType, setDeliveryType } = useCart();
+  const {
+    cartItems,
+    cartTotal,
+    refreshCart,
+    storeGroups,
+    isMultiStore,
+    storesCount,
+  } = useCart();
   const { isAuthenticated } = useAuth();
   const { placeOrder } = useOrder();
   const { showBigAlert } = useToast();
@@ -61,8 +69,11 @@ const Checkout = () => {
   const [distance, setDistance] = useState(null);
   const [distanceLoading, setDistanceLoading] = useState(false);
   const [serverDeliveryCharge, setServerDeliveryCharge] = useState(null);
+  const [ratePerKm, setRatePerKm] = useState(10);
+  const [immediateDeliveryCharge, setImmediateDeliveryCharge] = useState(50);
+  const [billedDistanceKm, setBilledDistanceKm] = useState(null);
   const [availableSlots, setAvailableSlots] = useState([]);
-  const [chosenTimeOption, setChosenTimeOption] = useState("immediately");
+  const [chosenTimeOption, setChosenTimeOption] = useState("later");
   const [customDeliveryTime, setCustomDeliveryTime] = useState("");
 
   useEffect(() => {
@@ -72,11 +83,21 @@ const Checkout = () => {
         try {
           const res = await OrderService.calculateDeliveryCharge({
             addressId: selectedAddressId,
-            deliveryType,
+            chosenTimeOption,
+            deliveryType: chosenTimeOption === "immediately" ? "immediately" : "normal",
           });
           if (res.success && res.data) {
             const dist = res.data.distance_km ?? res.data.distance;
             setDistance(dist !== null && dist !== undefined ? parseFloat(dist) : 0);
+            if (res.data.rate_per_km !== undefined) {
+              setRatePerKm(parseFloat(res.data.rate_per_km));
+            }
+            if (res.data.immediate_delivery_charge !== undefined) {
+              setImmediateDeliveryCharge(parseFloat(res.data.immediate_delivery_charge));
+            }
+            if (res.data.billed_distance_km !== undefined) {
+              setBilledDistanceKm(parseInt(res.data.billed_distance_km, 10));
+            }
             if (res.data.total_delivery_charge !== undefined) {
               setServerDeliveryCharge(parseFloat(res.data.total_delivery_charge));
             }
@@ -88,7 +109,11 @@ const Checkout = () => {
                   (s) => (s.id || s.option) === chosenTimeOption,
                 );
                 if (!hasCurrent) {
-                  setChosenTimeOption(res.data.slots[0].id || res.data.slots[0].option);
+                  // Default to first non-immediate slot
+                  const defaultSlot = res.data.slots.find(
+                    (s) => (s.id || s.option) !== "immediately",
+                  ) || res.data.slots[0];
+                  setChosenTimeOption(defaultSlot.id || defaultSlot.option);
                 }
               }
             }
@@ -102,86 +127,31 @@ const Checkout = () => {
       fetchDeliveryEstimate();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedAddressId, deliveryType]);
+  }, [selectedAddressId, chosenTimeOption]);
 
-  const baseCharge = distance !== null ? Math.round(distance * 10) : 0;
-  const normalCharge = baseCharge;
-  const urgentCharge = baseCharge + 50;
+  // Rounding rule: under 1km = 1km, 1km+ = round(dist) (e.g. 2.4km -> 2km, 2.5km -> 3km, 2.6km -> 3km)
+  const billedKm = billedDistanceKm !== null
+    ? billedDistanceKm
+    : (distance !== null ? (distance < 1.0 ? 1 : Math.max(1, Math.round(distance))) : 0);
+  const baseDeliveryFee = billedKm * (ratePerKm || 10);
+  const isImmediate = chosenTimeOption === "immediately";
+  const immediateSurcharge = isImmediate ? (immediateDeliveryCharge || 50) : 0;
+
+  const multiDeliveryBase = storeGroups.length > 0
+    ? storeGroups.reduce((acc, g) => acc + (Number(g.delivery_charge) || 0), 0)
+    : 0;
+
   const deliveryCharge = serverDeliveryCharge !== null
     ? serverDeliveryCharge
-    : (deliveryType === "urgent" ? urgentCharge : normalCharge);
+    : ((isMultiStore && storeGroups.length > 1) ? multiDeliveryBase : (baseDeliveryFee + immediateSurcharge));
   const finalTotal = cartTotal + deliveryCharge;
-
-  const renderDeliveryOptionCard = () => (
-    <div className="ck-card mb-3 mt-3">
-      <div className="ck-card-header ck-card-header--plain" style={{ borderLeft: "4px solid var(--ck-green, #28a745)" }}>
-        <span className="font-weight-bold" style={{ color: "var(--ck-green, #28a745)" }}>Delivery Option</span>
-      </div>
-      <div className="ck-card-body">
-        <div className="d-flex flex-column gap-3">
-          <label 
-            className={`d-flex align-items-center p-3 border rounded ${deliveryType === "normal" ? "border-success bg-light" : ""}`} 
-            style={{ cursor: "pointer", transition: "all 0.2s" }}
-          >
-            <input
-              type="radio"
-              name="deliveryType"
-              value="normal"
-              checked={deliveryType === "normal"}
-              onChange={() => setDeliveryType("normal")}
-              className="me-3"
-              style={{ accentColor: "var(--ck-green)", width: "18px", height: "18px" }}
-            />
-            <div className="flex-grow-1">
-              <strong className="d-block text-dark">Normal Delivery</strong>
-              <span className="text-muted small">Delivered in 3-5 business days</span>
-            </div>
-            <span className="fw-bold text-dark">
-              {formatPrice(normalCharge)}
-            </span>
-          </label>
-
-          <label 
-            className={`d-flex align-items-center p-3 border rounded ${deliveryType === "urgent" ? "border-success bg-light" : ""}`} 
-            style={{ cursor: "pointer", transition: "all 0.2s" }}
-          >
-            <input
-              type="radio"
-              name="deliveryType"
-              value="urgent"
-              checked={deliveryType === "urgent"}
-              onChange={() => setDeliveryType("urgent")}
-              className="me-3"
-              style={{ accentColor: "var(--ck-green)", width: "18px", height: "18px" }}
-            />
-            <div className="flex-grow-1">
-              <strong className="d-block text-dark">
-                Urgent Delivery
-                <span style={{ color: "#dc3545", fontSize: "0.8rem", marginLeft: "8px", fontWeight: "600" }}>(+ ₹50.00 Extra)</span>
-              </strong>
-              <span className="text-muted small">Delivered within 24 hours</span>
-            </div>
-            <span className="fw-bold text-dark">
-              {formatPrice(urgentCharge)}
-            </span>
-          </label>
-        </div>
-      </div>
-    </div>
-  );
 
   const renderDeliveryTimeSlotCard = () => {
     // Default fallback slots if server hasn't returned them yet
-    const slots =
+    const rawSlots =
       availableSlots.length > 0
         ? availableSlots
         : [
-            {
-              id: "immediately",
-              title: "Immediately",
-              subtitle: "Deliver ASAP (Prep + travel time)",
-              formatted_window: "Fastest dispatch",
-            },
             {
               id: "later",
               title: "Later (After 3–4 Hours)",
@@ -206,7 +176,22 @@ const Checkout = () => {
               subtitle: "Specify your preferred time",
               formatted_window: "Choose time below",
             },
+            {
+              id: "immediately",
+              title: "⚡ Immediately (Express Dispatch)",
+              subtitle: "Deliver ASAP (Prep + travel time)",
+              formatted_window: "Fastest dispatch",
+            },
           ];
+
+    // Standard/later slots first, express immediately slot clearly distinguished
+    const slots = rawSlots.slice().sort((a, b) => {
+      const aId = a.id || a.option;
+      const bId = b.id || b.option;
+      if (aId === "immediately") return 1;
+      if (bId === "immediately") return -1;
+      return 0;
+    });
 
     return (
       <div className="ck-card mb-3">
@@ -264,8 +249,20 @@ const Checkout = () => {
                         >
                           {slot.title ||
                             slotId.charAt(0).toUpperCase() + slotId.slice(1)}
+                          {slotId === "immediately" && (
+                            <span 
+                              className="badge bg-danger ms-2"
+                              style={{ fontSize: "0.72rem", verticalAlign: "middle" }}
+                            >
+                              + ₹{Number(immediateDeliveryCharge || 50).toFixed(0)} Extra
+                            </span>
+                          )}
                         </strong>
-                        <span className="text-muted small">{slot.subtitle}</span>
+                        <span className="text-muted small">
+                          {slotId === "immediately" 
+                            ? `Fastest dispatch ASAP (+ ₹${Number(immediateDeliveryCharge || 50).toFixed(0)} flat surcharge)`
+                            : slot.subtitle}
+                        </span>
                       </div>
                     </div>
                     {slot.formatted_window && (
@@ -333,7 +330,7 @@ const Checkout = () => {
       addressId: selectedAddressId,
       notes,
       deliveryCharge,
-      deliveryType,
+      deliveryType: chosenTimeOption === "immediately" ? "immediately" : "normal",
       distance,
       chosenTimeOption,
       customDeliveryTime:
@@ -403,6 +400,39 @@ const Checkout = () => {
             </div>
           </div>
         </div>
+
+        {/* Multi-Store Guidance Banner */}
+        {isMultiStore && storeGroups.length > 1 && (
+          <div
+            className="p-3 mb-4 rounded-3 d-flex align-items-center gap-3"
+            style={{
+              backgroundColor: "#eef6ff",
+              border: "1.5px solid #bddbff",
+              color: "#00204E",
+            }}
+          >
+            <div
+              className="d-flex align-items-center justify-content-center flex-shrink-0"
+              style={{
+                width: 42,
+                height: 42,
+                borderRadius: "50%",
+                backgroundColor: "#dbeafe",
+                color: "#00204E",
+              }}
+            >
+              <FaStore size={20} />
+            </div>
+            <div>
+              <div className="fw-bold" style={{ fontSize: "0.95rem" }}>
+                Multi-Store Order ({storesCount || storeGroups.length} Stores)
+              </div>
+              <div className="small text-muted" style={{ fontSize: "0.82rem" }}>
+                Your cart contains items from {storesCount || storeGroups.length} different stores. A single unified order will be placed with all items organized by their respective stores.
+              </div>
+            </div>
+          </div>
+        )}
 
         {error && <div className="ck-alert">{error}</div>}
 
@@ -551,8 +581,6 @@ const Checkout = () => {
                   </div>
                 </div>
 
-                {renderDeliveryOptionCard()}
-
                 {renderDeliveryTimeSlotCard()}
 
                 <div className="ck-card mb-3">
@@ -569,34 +597,103 @@ const Checkout = () => {
                   </div>
                 </div>
 
-                <div className="ck-card">
-                  <div className="ck-card-header ck-card-header--plain">
-                    <span>Order Items ({cartItems.length})</span>
-                  </div>
-                  <div className="ck-card-body pb-2">
-                    {cartItems.map((item) => (
-                      <div className="ck-review-item" key={item.id}>
-                        <img
-                          src={
-                            item.image ||
-                            "https://images.unsplash.com/photo-1542838132-92c53300491e?w=100"
-                          }
-                          alt={item.name}
-                          className="ck-review-thumb"
-                        />
-                        <div>
-                          <p className="ck-review-item-name">{item.name}</p>
-                          <span className="ck-review-item-qty">
-                            Qty: {item.quantity}
+                {/* Review Items: Multi-Store vs Single Store */}
+                {isMultiStore && storeGroups.length > 1 ? (
+                  <div className="mb-3">
+                    <h5 className="fw-bold text-dark mb-3" style={{ fontSize: "1rem" }}>
+                      Order Items by Store ({storesCount || storeGroups.length} Stores)
+                    </h5>
+                    {storeGroups.map((group, gIdx) => (
+                      <div className="ck-card mb-3" key={group.vendor_id || gIdx}>
+                        <div
+                          className="ck-card-header ck-card-header--plain d-flex justify-content-between align-items-center"
+                          style={{ backgroundColor: "#f8fafd", borderBottom: "1.5px solid #edf2f7" }}
+                        >
+                          <div className="d-flex align-items-center gap-2">
+                            <span
+                              className="badge"
+                              style={{ backgroundColor: "#00204E", color: "#fff", fontSize: "0.72rem" }}
+                            >
+                              STORE {String.fromCharCode(65 + gIdx)}
+                            </span>
+                            <strong className="text-dark">{group.store_name}</strong>
+                            {group.distance_text && (
+                              <span className="text-muted small">({group.distance_text})</span>
+                            )}
+                          </div>
+                          <span className="text-muted small">
+                            {group.items_count || group.items?.length} items
                           </span>
                         </div>
-                        <span className="ck-review-item-price">
-                          {formatPrice(item.price * item.quantity)}
-                        </span>
+                        <div className="ck-card-body pb-2">
+                          {(group.items || []).map((item, itemIdx) => (
+                            <div className="ck-review-item" key={item.id || item.product_id || itemIdx}>
+                              <img
+                                src={
+                                  getImageUrl(item.image_url || item.image)
+                                }
+                                alt={item.name || item.product_name || "Product"}
+                                className="ck-review-thumb"
+                              />
+                              <div>
+                                <p className="ck-review-item-name">{item.name || item.product_name}</p>
+                                <span className="ck-review-item-qty">
+                                  Qty: {item.quantity}
+                                </span>
+                              </div>
+                              <span className="ck-review-item-price">
+                                {formatPrice(item.price * item.quantity)}
+                              </span>
+                            </div>
+                          ))}
+                          <div
+                            className="d-flex justify-content-between align-items-center pt-2 mt-2 border-top text-muted small"
+                          >
+                            <span>Store Subtotal + Delivery:</span>
+                            <span className="fw-bold text-dark">
+                              {formatPrice(group.subtotal)} + {formatPrice(group.delivery_charge)} = {formatPrice(group.store_total || (Number(group.subtotal) + Number(group.delivery_charge)))}
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
-                </div>
+                ) : (
+                  <div className="ck-card">
+                    <div className="ck-card-header ck-card-header--plain">
+                      <span>
+                        Order Items ({cartItems.length})
+                        {storeGroups[0]?.store_name && (
+                          <span className="text-muted small ms-2">
+                            • {storeGroups[0].store_name}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                    <div className="ck-card-body pb-2">
+                      {cartItems.map((item, itemIdx) => (
+                        <div className="ck-review-item" key={item.id || item.product_id || itemIdx}>
+                          <img
+                            src={
+                              getImageUrl(item.image_url || item.image)
+                            }
+                            alt={item.name || item.product_name || "Product"}
+                            className="ck-review-thumb"
+                          />
+                          <div>
+                            <p className="ck-review-item-name">{item.name || item.product_name}</p>
+                            <span className="ck-review-item-qty">
+                              Qty: {item.quantity}
+                            </span>
+                          </div>
+                          <span className="ck-review-item-price">
+                            {formatPrice(item.price * item.quantity)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="ck-step-actions">
                   <button
@@ -635,30 +732,54 @@ const Checkout = () => {
                   <span className="ck-label">Subtotal</span>
                   <span>{formatPrice(cartTotal)}</span>
                 </div>
-                 <div className="ck-summary-row align-items-center" style={{ background: "#e8f4fd", padding: "6px 10px", borderRadius: "6px", margin: "6px 0" }}>
-                  <span className="ck-label font-weight-bold" style={{ color: "#00204E", margin: 0 }}>Delivery Mode</span>
-                  <span className="text-capitalize font-weight-bold badge text-white" style={{ backgroundColor: deliveryType === "urgent" ? "#dc3545" : "#00204E", padding: "4px 8px", borderRadius: "4px" }}>
-                    {deliveryType}
-                  </span>
-                </div>
-                <div className="ck-summary-row align-items-center" style={{ background: "#f8f9fa", padding: "6px 10px", borderRadius: "6px", margin: "6px 0" }}>
-                  <span className="ck-label font-weight-bold" style={{ color: "#00204E", margin: 0 }}>Delivery Slot</span>
-                  <span className="text-capitalize font-weight-bold badge" style={{ backgroundColor: "#00204E", color: "#fff", padding: "4px 8px", borderRadius: "4px" }}>
-                    {chosenTimeOption}
+                <div className="ck-summary-row align-items-center" style={{ background: isImmediate ? "#fef2f2" : "#f0fdf4", padding: "6px 10px", borderRadius: "6px", margin: "6px 0", border: `1px solid ${isImmediate ? "#fecaca" : "#bbf7d0"}` }}>
+                  <span className="ck-label font-weight-bold" style={{ color: isImmediate ? "#991b1b" : "#166534", margin: 0 }}>Delivery Slot</span>
+                  <span className="text-capitalize font-weight-bold badge" style={{ backgroundColor: isImmediate ? "#dc2626" : "#00204E", color: "#fff", padding: "4px 8px", borderRadius: "4px" }}>
+                    {isImmediate ? "⚡ Immediately" : (chosenTimeOption === "later" ? "Standard / Later" : chosenTimeOption.charAt(0).toUpperCase() + chosenTimeOption.slice(1))}
                   </span>
                 </div>
                 <div className="ck-summary-row">
-                  <span className="ck-label">Delivery Charge</span>
-                  <span>
+                  <span className="ck-label">
+                    {isMultiStore && storeGroups.length > 1
+                      ? `Delivery Charges (${storesCount || storeGroups.length} stores)`
+                      : "Delivery Charge"}
+                  </span>
+                  <span className="fw-bold" style={{ color: "#00204E" }}>
                     {distanceLoading ? (
                       <span className="text-muted small">Calculating...</span>
-                    ) : distance === null ? (
+                    ) : distance === null && !(isMultiStore && storeGroups.length > 1) ? (
                       <span className="text-muted small">Select address</span>
                     ) : (
                       formatPrice(deliveryCharge)
                     )}
                   </span>
                 </div>
+                {distance !== null && !(isMultiStore && storeGroups.length > 1) && (
+                  <div className="p-2 mb-2 rounded" style={{ background: "#f8fafc", fontSize: "0.78rem", border: "1px solid #e2e8f0" }}>
+                    <div className="d-flex justify-content-between text-muted py-1">
+                      <span>Distance ({distance} km → {billedKm} km @ ₹{ratePerKm}/km):</span>
+                      <span className="fw-semibold text-dark">{formatPrice(baseDeliveryFee)}</span>
+                    </div>
+                    {isImmediate && (
+                      <div className="d-flex justify-content-between text-danger py-1">
+                        <span>⚡ Immediate Surcharge:</span>
+                        <span className="fw-bold text-danger">+ {formatPrice(immediateSurcharge)}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {isMultiStore && storeGroups.length > 1 && (
+                  <div className="p-2 mb-2 rounded" style={{ background: "#f8fafd", fontSize: "0.75rem", border: "1px solid #edf2f7" }}>
+                    {storeGroups.map((g, idx) => (
+                      <div key={g.vendor_id || idx} className="d-flex justify-content-between text-muted py-1">
+                        <span className="text-truncate me-2" style={{ maxWidth: "150px" }}>
+                          • {g.store_name}
+                        </span>
+                        <span>{formatPrice(g.delivery_charge)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div className="ck-summary-total">
                   <span className="ck-total-label">Estimated Total</span>
                   <span className="ck-total-value">

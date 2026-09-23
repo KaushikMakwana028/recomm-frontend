@@ -27,18 +27,31 @@ const writeGuestCart = (items) => {
 
 // Normalize a get_cart API row -> shape Cart.jsx expects
 const mapApiItem = (row) => ({
-  id: Number(row.product_id),
-  name: row.product_name,
-  price: Number(row.sale_price ?? row.price),
-  image: row.image_url,
-  category: row.category_name,
-  quantity: Number(row.quantity),
+  id: Number(row.product_id ?? row.id),
+  name: row.product_name ?? row.name ?? "Product",
+  price: Number(row.sale_price ?? row.price ?? 0),
+  image: row.image_url || row.image || "",
+  image_url: row.image_url || row.image || "",
+  category: row.category_name ?? row.category ?? "",
+  quantity: Number(row.quantity || 1),
+  vendor_id: Number(row.vendor_id || 0),
+  vendor_name: row.vendor_name || "",
+  store_name: row.store_name || "",
+  store_photo_url: row.store_photo_url || null,
+  store_address: row.store_address || "",
+  distance_km: row.distance_km !== undefined && row.distance_km !== null ? Number(row.distance_km) : null,
+  distance_text: row.distance_text || "",
+  item_total: Number(row.item_total || 0),
 });
 
 export const CartProvider = ({ children }) => {
   const { isAuthenticated } = useAuth();
   const { showToast } = useToast();
   const [cartItems, setCartItems] = useState([]);
+  const [storeGroups, setStoreGroups] = useState([]);
+  const [isMultiStore, setIsMultiStore] = useState(false);
+  const [storesCount, setStoresCount] = useState(0);
+  const [cartSummary, setCartSummary] = useState(null);
   const [loading, setLoading] = useState(false);
 
   const healGuestCart = async (items) => {
@@ -72,6 +85,46 @@ export const CartProvider = ({ children }) => {
     return items;
   };
 
+  const buildGuestStoreGroups = (items) => {
+    if (!items || items.length === 0) return [];
+    const map = {};
+    items.forEach((item) => {
+      const vId = item.vendor_id || 0;
+      const sName = item.store_name || (vId ? `Store #${vId}` : "Store");
+      if (!map[vId]) {
+        map[vId] = {
+          vendor_id: vId,
+          store_name: sName,
+          items: [],
+          items_count: 0,
+          total_quantity: 0,
+          subtotal: 0,
+          delivery_charge: 50,
+          discount: 0,
+          store_total: 0,
+        };
+      }
+      map[vId].items.push(item);
+      map[vId].items_count += 1;
+      map[vId].total_quantity += Number(item.quantity);
+      map[vId].subtotal += item.price * item.quantity;
+    });
+    return Object.values(map).map((g) => ({
+      ...g,
+      subtotal: Math.round(g.subtotal * 100) / 100,
+      store_total: Math.round((g.subtotal + g.delivery_charge - g.discount) * 100) / 100,
+    }));
+  };
+
+  const updateGuestState = (items) => {
+    writeGuestCart(items);
+    setCartItems(items);
+    const groups = buildGuestStoreGroups(items);
+    setStoreGroups(groups);
+    setIsMultiStore(groups.length > 1);
+    setStoresCount(groups.length);
+  };
+
   // Load cart whenever auth state changes
   useEffect(() => {
     if (isAuthenticated) {
@@ -79,7 +132,7 @@ export const CartProvider = ({ children }) => {
     } else {
       const guestItems = readGuestCart();
       healGuestCart(guestItems).then((healedItems) => {
-        setCartItems(healedItems);
+        updateGuestState(healedItems);
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -89,7 +142,17 @@ export const CartProvider = ({ children }) => {
     setLoading(true);
     const result = await CartService.getCart();
     if (result.success) {
-      setCartItems((result.data?.items || []).map(mapApiItem));
+      const items = (result.data?.items || []).map(mapApiItem);
+      setCartItems(items);
+      const rawGroups = result.data?.store_groups || [];
+      const normalizedGroups = rawGroups.map((g) => ({
+        ...g,
+        items: (g.items || []).map(mapApiItem),
+      }));
+      setStoreGroups(normalizedGroups);
+      setIsMultiStore(Boolean(result.data?.is_multi_store));
+      setStoresCount(Number(result.data?.stores_count || 0));
+      setCartSummary(result.data?.summary || null);
     }
     setLoading(false);
   };
@@ -134,11 +197,12 @@ export const CartProvider = ({ children }) => {
           image: product.image_url || product.image,
           category: product.category_name,
           quantity,
+          vendor_id: product.vendor_id || 0,
+          store_name: product.store_name || "",
         },
       ];
     }
-    writeGuestCart(updated);
-    setCartItems(updated);
+    updateGuestState(updated);
     if (!silent) showToast(`Added "${product.name}" to cart!`, "success");
     return { success: true };
   };
@@ -155,8 +219,7 @@ export const CartProvider = ({ children }) => {
       quantity <= 0
         ? guestItems.filter((i) => i.id !== productId)
         : guestItems.map((i) => (i.id === productId ? { ...i, quantity } : i));
-    writeGuestCart(updated);
-    setCartItems(updated);
+    updateGuestState(updated);
     return { success: true };
   };
 
@@ -174,8 +237,7 @@ export const CartProvider = ({ children }) => {
     }
 
     const updated = readGuestCart().filter((i) => i.id !== productId);
-    writeGuestCart(updated);
-    setCartItems(updated);
+    updateGuestState(updated);
     showToast(`Removed "${productName}" from cart.`, "info");
     return { success: true };
   };
@@ -183,12 +245,22 @@ export const CartProvider = ({ children }) => {
   const clearCart = async () => {
     if (isAuthenticated) {
       const result = await CartService.clearCartApi();
-      if (result.success) setCartItems([]);
+      if (result.success) {
+        setCartItems([]);
+        setStoreGroups([]);
+        setIsMultiStore(false);
+        setStoresCount(0);
+        setCartSummary(null);
+      }
       return result;
     }
 
     writeGuestCart([]);
     setCartItems([]);
+    setStoreGroups([]);
+    setIsMultiStore(false);
+    setStoresCount(0);
+    setCartSummary(null);
     return { success: true };
   };
 
@@ -202,6 +274,10 @@ export const CartProvider = ({ children }) => {
 
   const value = {
     cartItems,
+    storeGroups,
+    isMultiStore,
+    storesCount,
+    cartSummary,
     cartTotal,
     cartItemCount,
     loading,

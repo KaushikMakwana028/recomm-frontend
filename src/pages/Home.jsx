@@ -8,6 +8,11 @@ import {
   FaLock,
   FaHeadset,
   FaArrowRight,
+  FaStore,
+  FaClock,
+  FaMapMarkerAlt,
+  FaRoute,
+  FaTags,
 } from "react-icons/fa";
 import AuthService from "../services/authService";
 import NoVendorsEmptyState from "../components/NoVendorsEmptyState";
@@ -18,17 +23,21 @@ import {
 import { useCart } from "../context/CartContext";
 import { useWishlist } from "../context/WishlistContext";
 import { formatPrice } from "../utils/helpers";
+import { getStockInfo } from "../utils/stockUtils";
 
 const NAVY = "#00204E";
 const GREEN = "#34A129";
 const FALLBACK_IMG =
   "https://images.unsplash.com/photo-1542838132-92c53300491e?w=400";
+const FALLBACK_STORE_IMG =
+  "https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=800&auto=format&fit=crop&q=60";
 
 const Home = () => {
   const { addToCart } = useCart();
   const { toggleWishlist, isInWishlist } = useWishlist();
   const [featuredProducts, setFeaturedProducts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [nearbyStores, setNearbyStores] = useState([]);
   const [loading, setLoading] = useState(true);
   const [noNearbyVendors, setNoNearbyVendors] = useState(false);
 
@@ -73,8 +82,13 @@ const Home = () => {
 
     const result = await AuthService.getHomeData({ latitude: lat, longitude: lng });
     if (result.success) {
-      setFeaturedProducts(result.data.products || []);
+      // Home page must strictly show only in-stock products (no Unavailable, no Only X left)
+      const inStockProducts = (result.data.products || []).filter(
+        (p) => getStockInfo(p).state === "available"
+      );
+      setFeaturedProducts(inStockProducts);
       setCategories(result.data.categories || []);
+      setNearbyStores(result.data.stores || []);
       setNoNearbyVendors(Boolean(result.no_nearby_vendors || result.data?.no_nearby_vendors));
     } else {
       setNoNearbyVendors(false);
@@ -183,6 +197,118 @@ const Home = () => {
 
         .hm-outline-btn { border: 2px solid ${NAVY}; color: ${NAVY}; font-weight: 700; }
         .hm-outline-btn:hover { background: ${NAVY}; color: #fff; }
+
+        /* ---------- Store cards ---------- */
+        .hm-store-card {
+          border: none;
+          border-radius: 16px;
+          overflow: hidden;
+          height: 100%;
+          background: #fff;
+          box-shadow: 0 4px 14px rgba(0,32,78,0.08);
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+          display: flex;
+          flex-direction: column;
+        }
+        .hm-store-card:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 12px 28px rgba(0,32,78,0.14);
+        }
+        .hm-store-img-wrap {
+          position: relative;
+          height: 160px;
+          overflow: hidden;
+          background: #f1f5f9;
+        }
+        .hm-store-img-wrap img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          transition: transform 0.35s ease;
+        }
+        .hm-store-card:hover .hm-store-img-wrap img {
+          transform: scale(1.06);
+        }
+        .hm-store-status-badge {
+          position: absolute;
+          top: 10px;
+          left: 10px;
+          font-size: 0.76rem;
+          font-weight: 700;
+          padding: 4px 10px;
+          border-radius: 20px;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+        }
+        .hm-store-dist-badge {
+          position: absolute;
+          bottom: 10px;
+          right: 10px;
+          background: rgba(0, 32, 78, 0.85);
+          backdrop-filter: blur(4px);
+          color: #fff;
+          font-size: 0.74rem;
+          font-weight: 600;
+          padding: 3px 9px;
+          border-radius: 12px;
+        }
+        .hm-store-body {
+          padding: 1.15rem;
+          display: flex;
+          flex-direction: column;
+          flex-grow: 1;
+          justify-content: space-between;
+        }
+        .hm-store-name {
+          color: ${NAVY};
+          font-weight: 700;
+          font-size: 1.05rem;
+          margin-bottom: 0.25rem;
+          text-decoration: none;
+          display: -webkit-box;
+          -webkit-line-clamp: 1;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+        .hm-store-name:hover {
+          color: ${GREEN};
+        }
+        .hm-store-category {
+          color: #64748b;
+          font-size: 0.82rem;
+          margin-bottom: 0.6rem;
+          display: -webkit-box;
+          -webkit-line-clamp: 1;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+        .hm-store-meta {
+          font-size: 0.8rem;
+          color: #64748b;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          margin-bottom: 0.9rem;
+        }
+        .hm-store-btn {
+          background: ${GREEN};
+          border: 1px solid ${GREEN};
+          color: #fff;
+          font-weight: 700;
+          border-radius: 10px;
+          padding: 7px 14px;
+          font-size: 0.88rem;
+          text-decoration: none;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          transition: background 0.2s;
+        }
+        .hm-store-btn:hover {
+          background: #2a8720;
+          border-color: #2a8720;
+          color: #fff;
+        }
 
         @media (max-width: 767.98px) {
           .hm-hero { padding: 2.25rem 0 2rem; text-align: center; }
@@ -317,6 +443,113 @@ const Home = () => {
         </div>
       </section>
 
+      {/* Stores Near You / Explore Stores Section */}
+      <section className="py-5 bg-white">
+        <div className="container">
+          <div className="hm-section-head">
+            <h2>Stores Near You</h2>
+            <p>Explore nearby merchant stores and browse their full catalogues</p>
+          </div>
+
+          {loading ? (
+            <div className="row g-3 g-md-4">
+              {[1, 2, 3, 4].map((n) => (
+                <div key={n} className="col-12 col-sm-6 col-lg-3">
+                  <div className="card border-0 shadow-sm rounded-4 overflow-hidden p-3" style={{ height: "280px" }}>
+                    <div className="bg-light rounded-3 w-100 mb-3" style={{ height: "140px" }} />
+                    <div className="bg-light rounded w-75 mb-2" style={{ height: "18px" }} />
+                    <div className="bg-light rounded w-50 mb-3" style={{ height: "14px" }} />
+                    <div className="bg-light rounded w-100 mt-auto" style={{ height: "36px" }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : nearbyStores.length === 0 ? (
+            noNearbyVendors ? (
+              <NoVendorsEmptyState />
+            ) : (
+              <div className="text-center py-5 bg-light rounded-4 my-2">
+                <FaStore size={42} className="text-muted mb-2 opacity-50" />
+                <h5 className="text-muted fw-bold">No stores available near your location</h5>
+                <p className="text-muted small mb-0">Check back later or update your delivery address</p>
+              </div>
+            )
+          ) : (
+            <div className="row g-3 g-md-4">
+              {nearbyStores.map((store) => (
+                <div key={store.id} className="col-12 col-sm-6 col-lg-3">
+                  <div className="hm-store-card">
+                    <div className="hm-store-img-wrap">
+                      <Link to={`/store/${store.id}`}>
+                        <img
+                          src={store.store_photo_url || FALLBACK_STORE_IMG}
+                          alt={store.store_name}
+                          loading="lazy"
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src = FALLBACK_STORE_IMG;
+                          }}
+                        />
+                      </Link>
+
+                      {/* Store Status: Factual Open/Closed */}
+                      {store.is_open ? (
+                        <span className="hm-store-status-badge bg-success text-white">
+                          🟢 Open
+                        </span>
+                      ) : (
+                        <span className="hm-store-status-badge bg-danger text-white">
+                          🔴 Closed
+                        </span>
+                      )}
+
+                      {/* Distance */}
+                      {store.distance_text && (
+                        <span className="hm-store-dist-badge">
+                          <FaRoute className="me-1" size={10} />
+                          {store.distance_text}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="hm-store-body">
+                      <div>
+                        <Link to={`/store/${store.id}`} className="hm-store-name">
+                          {store.store_name}
+                        </Link>
+                        <div className="hm-store-category">
+                          <FaTags className="me-1" size={11} />
+                          {store.category_summary || "Grocery & Essentials"}
+                        </div>
+
+                        <div className="hm-store-meta">
+                          {store.address && (
+                            <span className="text-truncate">
+                              <FaMapMarkerAlt className="me-1 text-secondary" size={11} />
+                              {store.address}
+                            </span>
+                          )}
+                          {store.operating_hours && store.operating_hours !== "Hours not specified" && (
+                            <span>
+                              <FaClock className="me-1 text-secondary" size={11} />
+                              {store.operating_hours}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <Link to={`/store/${store.id}`} className="hm-store-btn w-100">
+                        View Store <FaArrowRight size={11} />
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
       {/* Featured Products Section */}
       <section id="featured" className="py-5">
         <div className="container">
@@ -337,62 +570,113 @@ const Home = () => {
             )
           ) : (
             <div className="row g-3 g-md-4">
-              {featuredProducts.slice(0, 8).map((product) => (
-                <div key={product.id} className="col-6 col-md-6 col-lg-3">
-                  <div className="hm-prod-card card">
-                    <div className="hm-prod-img-wrap">
-                      <Link to={`/product/${product.id}`}>
-                        <img
-                          src={product.image_url || FALLBACK_IMG}
-                          alt={product.name}
-                          loading="lazy"
-                        />
-                      </Link>
-                      <button
-                        className="hm-wish-btn"
-                        onClick={() => toggleWishlist(product)}
-                        aria-label="Add to wishlist"
-                      >
-                        <FaHeart
-                          size={15}
-                          className={
-                            isInWishlist(product.id)
-                              ? "text-danger"
-                              : "text-muted"
-                          }
-                        />
-                      </button>
-                    </div>
+              {featuredProducts.slice(0, 8).map((product) => {
+                const stockInfo = getStockInfo(product);
+                const storeName = product.store_name || product.vendor_name;
+                return (
+                  <div key={product.id} className="col-6 col-md-6 col-lg-3">
+                    <div className="hm-prod-card card h-100 d-flex flex-column">
+                      <div className="hm-prod-img-wrap position-relative">
+                        <Link to={`/product/${product.id}`}>
+                          <img
+                            src={product.image_url || FALLBACK_IMG}
+                            alt={product.name}
+                            loading="lazy"
+                          />
+                        </Link>
+                        <button
+                          className="hm-wish-btn"
+                          onClick={() => toggleWishlist(product)}
+                          aria-label="Add to wishlist"
+                        >
+                          <FaHeart
+                            size={15}
+                            className={
+                              isInWishlist(product.id)
+                                ? "text-danger"
+                                : "text-muted"
+                            }
+                          />
+                        </button>
+                      </div>
 
-                    <div className="card-body pb-2">
-                      <Link
-                        to={`/product/${product.id}`}
-                        className="text-decoration-none hm-prod-title d-block mb-1"
-                      >
-                        {product.name}
-                      </Link>
-                      {product.category_name && (
-                        <p className="text-muted small mb-1">
-                          {product.category_name}
-                        </p>
-                      )}
-                      <span className="hm-prod-price fs-6">
-                        {formatPrice(product.price)}
-                      </span>
-                    </div>
+                      <div className="card-body pb-2 d-flex flex-column">
+                        <Link
+                          to={`/product/${product.id}`}
+                          className="text-decoration-none hm-prod-title d-block mb-1"
+                        >
+                          {product.name}
+                        </Link>
+                        {product.category_name && (
+                          <p className="text-muted small mb-1">
+                            {product.category_name}
+                          </p>
+                        )}
 
-                    <div className="card-footer bg-white border-0 pt-0">
-                      <button
-                        className="btn hm-btn-cta text-white w-100 btn-sm"
-                        onClick={() => handleAddToCart(product)}
-                      >
-                        <FaShoppingCart className="me-2" size={13} /> Add to
-                        Cart
-                      </button>
+                        {storeName && (
+                          <div className="mb-2">
+                            <Link
+                              to={product.vendor_id ? `/store/${product.vendor_id}` : "#"}
+                              className="d-inline-flex align-items-center gap-1 text-decoration-none"
+                              style={{
+                                fontSize: "0.76rem",
+                                color: "#475569",
+                                fontWeight: 600,
+                                background: "#f1f5f9",
+                                padding: "2px 7px",
+                                borderRadius: "6px",
+                                maxWidth: "100%",
+                              }}
+                              title={`Sold by ${storeName}`}
+                            >
+                              <FaStore style={{ color: GREEN, fontSize: "0.72rem", flexShrink: 0 }} />
+                              <span className="text-truncate">
+                                {storeName}
+                              </span>
+                            </Link>
+                          </div>
+                        )}
+
+                        <div className="mt-auto d-flex align-items-center justify-content-between flex-wrap gap-1 pt-1">
+                          <span className="hm-prod-price fs-6">
+                            {formatPrice(product.price)}
+                          </span>
+                          <span
+                            className="badge"
+                            style={{
+                              backgroundColor: stockInfo.badgeBg,
+                              color: stockInfo.badgeColor,
+                              border: `1px solid ${stockInfo.badgeBorder}`,
+                              fontSize: "0.7rem",
+                              fontWeight: 700,
+                              padding: "3px 6px",
+                              borderRadius: "6px",
+                            }}
+                          >
+                            {stockInfo.badgeLabel}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="card-footer bg-white border-0 pt-0">
+                        <button
+                          className="btn hm-btn-cta text-white w-100 btn-sm"
+                          onClick={() => handleAddToCart(product)}
+                          disabled={!stockInfo.canAddToCart}
+                          title={!stockInfo.canAddToCart ? stockInfo.cartDisabledReason : ""}
+                          style={{
+                            opacity: !stockInfo.canAddToCart ? 0.6 : 1,
+                            cursor: !stockInfo.canAddToCart ? "not-allowed" : "pointer",
+                          }}
+                        >
+                          <FaShoppingCart className="me-2" size={13} />
+                          {stockInfo.canAddToCart ? "Add to Cart" : stockInfo.buttonLabel}
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 

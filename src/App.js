@@ -8,6 +8,8 @@ import { CartProvider } from "./context/CartContext";
 import { WishlistProvider } from "./context/WishlistContext";
 import { OrderProvider } from "./context/OrderContext";
 import { ToastProvider } from "./context/ToastContext";
+import { ShoppingListProvider } from "./context/ShoppingListContext";
+import AddToListModal from "./components/AddToListModal";
 
 // Router
 import AppRouter from "./router";
@@ -366,7 +368,10 @@ const App = () => {
             <CartProvider>
               <WishlistProvider>
                 <OrderProvider>
-                  <AppRouter />
+                  <ShoppingListProvider>
+                    <AppRouter />
+                    <AddToListModal />
+                  </ShoppingListProvider>
                 </OrderProvider>
               </WishlistProvider>
             </CartProvider>

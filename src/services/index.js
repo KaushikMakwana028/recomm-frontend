@@ -6,6 +6,7 @@ import WishlistService from "./wishlistService";
 import ProfileService from "./profileService";
 import OrderService from "./orderService";
 import LegalService from "./legalService";
+import StoreService from "./storeService";
 
 export {
   AuthService,
@@ -16,5 +17,6 @@ export {
   ProfileService,
   OrderService,
   LegalService,
+  StoreService,
 };
 

@@ -8,6 +8,8 @@ import {
   FaArrowLeft,
   FaArrowRight,
   FaLock,
+  FaStore,
+  FaMapMarkerAlt,
 } from "react-icons/fa";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
@@ -18,8 +20,17 @@ import { formatPrice, getImageUrl } from "../utils/helpers";
 const NAVY = "#00204E";
 const GREEN = "#34A129";
 const Cart = () => {
-  const { cartItems, cartTotal, removeFromCart, updateQuantity, clearCart } =
-    useCart();
+  const {
+    cartItems,
+    cartTotal,
+    removeFromCart,
+    updateQuantity,
+    clearCart,
+    storeGroups,
+    isMultiStore,
+    storesCount,
+    cartSummary,
+  } = useCart();
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
@@ -62,14 +73,17 @@ const Cart = () => {
       OrderService.calculateDeliveryCharge({
         addressId: selectedAddress.id,
         deliveryType: "normal",
+        chosenTimeOption: "later",
       })
         .then((res) => {
           if (res.success && res.data) {
             const dist = res.data.distance_km ?? res.data.distance;
             setDistance(dist !== null && dist !== undefined ? parseFloat(dist) : 0);
-            if (res.data.total_delivery_charge !== undefined) {
-              setServerDeliveryCharge(parseFloat(res.data.total_delivery_charge));
-            }
+            // Cart ONLY shows distance-based delivery charge, never immediate surcharge
+            const charge = res.data.base_delivery_charge !== undefined
+              ? parseFloat(res.data.base_delivery_charge)
+              : parseFloat(res.data.total_delivery_charge || 0);
+            setServerDeliveryCharge(charge);
           }
         })
         .catch((err) => {
@@ -81,10 +95,19 @@ const Cart = () => {
     }
   }, [selectedAddress]);
 
-  const baseCharge = distance !== null ? Math.round(distance * 10) : 50;
-  const shippingCost = serverDeliveryCharge !== null ? serverDeliveryCharge : baseCharge;
+  // Rounding rule: under 1km = 1km (@ ₹10/km base), 1km+ = round(dist)
+  const billedKm = distance !== null ? (distance < 1.0 ? 1 : Math.max(1, Math.round(distance))) : 0;
+  const baseCharge = billedKm * 10;
+  const multiDeliveryCharge = storeGroups.length > 0
+    ? storeGroups.reduce((acc, g) => acc + (Number(g.delivery_charge) || 0), 0)
+    : 0;
+  const shippingCost = isMultiStore && storeGroups.length > 1
+    ? (serverDeliveryCharge !== null ? serverDeliveryCharge : (cartSummary?.total_delivery_charge !== undefined ? Number(cartSummary.total_delivery_charge) : multiDeliveryCharge))
+    : (serverDeliveryCharge !== null ? serverDeliveryCharge : baseCharge);
   const tax = 0; // Align with checkout and backend (no tax)
-  const finalTotal = cartTotal + shippingCost + tax;
+  const finalTotal = isMultiStore && storeGroups.length > 1
+    ? (cartSummary?.total_amount !== undefined ? Number(cartSummary.total_amount) : cartTotal + shippingCost)
+    : (cartTotal + shippingCost + tax);
 
   if (cartItems.length === 0) {
     return (
@@ -253,9 +276,52 @@ const Cart = () => {
         }
         .ct-save-btn:hover { border-color: ${NAVY}; }
 
-        .ct-secure-note {
-          display: flex; align-items: center; justify-content: center; gap: 0.4rem;
-          color: #98a2b8; font-size: 0.76rem; margin-top: 0.8rem;
+        /* ---------- Store group cards ---------- */
+        .ct-store-card {
+          background: #fff; border-radius: 16px; overflow: hidden;
+          box-shadow: 0 3px 16px rgba(0,32,78,0.07);
+          border: 1px solid #e8edf5;
+        }
+        .ct-store-head {
+          background: #f8fafd; border-bottom: 1.5px solid #edf2f7;
+          padding: 0.9rem 1.25rem;
+          display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;
+        }
+        .ct-store-badge {
+          background: ${NAVY}; color: #fff; font-size: 0.72rem; font-weight: 800;
+          letter-spacing: 0.05em; padding: 0.28rem 0.6rem; border-radius: 6px;
+          display: inline-flex; align-items: center; gap: 0.35rem;
+        }
+        .ct-store-title {
+          font-weight: 800; color: ${NAVY}; font-size: 1.05rem;
+        }
+        .ct-store-dist {
+          background: #eef7ee; color: ${GREEN}; font-size: 0.76rem; font-weight: 700;
+          padding: 0.22rem 0.55rem; border-radius: 999px;
+          display: inline-flex; align-items: center; gap: 0.25rem;
+        }
+        .ct-store-count {
+          color: #6c7a90; font-size: 0.82rem; font-weight: 600;
+        }
+        .ct-store-subhead {
+          padding: 0.4rem 1.25rem; background: #fff; border-bottom: 1px solid #f0f2f6;
+          font-size: 0.8rem;
+        }
+        .ct-store-footer {
+          background: #fafbfd; border-top: 1.5px solid #edf2f7;
+          padding: 0.9rem 1.25rem;
+        }
+        .ct-store-footer-row {
+          display: flex; justify-content: space-between; align-items: center;
+          font-size: 0.86rem; color: #6c7a90; margin-bottom: 0.35rem;
+        }
+        .ct-store-footer-total {
+          display: flex; justify-content: space-between; align-items: center;
+          padding-top: 0.5rem; margin-top: 0.5rem; border-top: 1px dashed #e2e8f0;
+          font-size: 0.92rem; font-weight: 700; color: ${NAVY};
+        }
+        .ct-store-footer-amount {
+          color: ${GREEN}; font-weight: 800; font-size: 1.05rem;
         }
 
         .ct-payments-card {
@@ -300,69 +366,218 @@ const Cart = () => {
         <div className="row g-4 align-items-start">
           {/* Cart Items */}
           <div className="col-lg-8">
-            <div className="ct-items-card mb-3">
-              <div className="ct-items-head">
-                <h5>Cart Items ({cartItems.length})</h5>
-                <button className="ct-clear-btn" onClick={clearCart}>
-                  <FaTrash size={11} /> Clear Cart
-                </button>
-              </div>
-
-              <div>
-                {cartItems.map((item) => (
-                  <div className="ct-item-row" key={item.id}>
-                    <div className="ct-item-img">
-                      <img src={getImageUrl(item.image)} alt={item.name} />
+            {isMultiStore && storeGroups.length > 1 ? (
+              <>
+                {/* Multi-store Notice Banner */}
+                <div
+                  className="p-3 mb-3 d-flex align-items-center justify-content-between gap-3 rounded-3"
+                  style={{
+                    backgroundColor: "#eef6ff",
+                    border: "1.5px solid #bddbff",
+                    color: NAVY,
+                  }}
+                >
+                  <div className="d-flex align-items-center gap-2">
+                    <div
+                      className="d-flex align-items-center justify-content-center flex-shrink-0"
+                      style={{
+                        width: 38,
+                        height: 38,
+                        borderRadius: "50%",
+                        backgroundColor: "#dbeafe",
+                        color: NAVY,
+                      }}
+                    >
+                      <FaStore size={18} />
                     </div>
-
-                    <div className="ct-item-info">
-                      <Link to={`/product/${item.id}`} className="ct-item-name">
-                        {item.name}
-                      </Link>
-                      {item.category && (
-                        <span className="ct-item-cat">{item.category}</span>
-                      )}
-                      <div className="ct-item-price mt-1">
-                        {formatPrice(item.price)}
+                    <div>
+                      <div className="fw-bold" style={{ fontSize: "0.95rem" }}>
+                        Ordering from {storesCount || storeGroups.length} Stores
+                      </div>
+                      <div className="small text-muted" style={{ fontSize: "0.8rem" }}>
+                        Items are grouped below by store with individual subtotals &amp; delivery charges.
                       </div>
                     </div>
+                  </div>
+                  <button className="ct-clear-btn flex-shrink-0" style={{ background: "#dc3545", color: "#fff" }} onClick={clearCart}>
+                    <FaTrash size={11} /> Clear All
+                  </button>
+                </div>
 
-                    <div className="ct-qty">
-                      <button
-                        onClick={() =>
-                          updateQuantity(item.id, Number(item.quantity) - 1)
-                        }
-                        disabled={item.quantity <= 1}
-                        aria-label="Decrease quantity"
-                      >
-                        <FaMinus size={10} />
-                      </button>
-                      <span>{item.quantity}</span>
-                      <button
-                        onClick={() =>
-                          updateQuantity(item.id, Number(item.quantity) + 1)
-                        }
-                        aria-label="Increase quantity"
-                      >
-                        <FaPlus size={10} />
-                      </button>
+                {/* Per-Store Group Cards */}
+                {storeGroups.map((group, gIdx) => (
+                  <div className="ct-store-card mb-4" key={group.vendor_id || gIdx}>
+                    <div className="ct-store-head">
+                      <div className="d-flex align-items-center gap-2 flex-wrap">
+                        <span className="ct-store-badge">
+                          <FaStore size={11} /> STORE {String.fromCharCode(65 + gIdx)}
+                        </span>
+                        <span className="ct-store-title">{group.store_name}</span>
+                        {group.distance_text && (
+                          <span className="ct-store-dist">
+                            <FaMapMarkerAlt size={10} /> {group.distance_text}
+                          </span>
+                        )}
+                      </div>
+                      <span className="ct-store-count">
+                        {group.items_count || group.items?.length || 0} {(group.items_count || group.items?.length) === 1 ? 'item' : 'items'}
+                      </span>
                     </div>
 
-                    <div className="ct-item-subtotal">
-                      {formatPrice(item.price * item.quantity)}
+                    {group.store_address && (
+                      <div className="ct-store-subhead">
+                        <FaMapMarkerAlt size={11} className="me-1 text-muted" />
+                        <span className="text-muted">{group.store_address}</span>
+                      </div>
+                    )}
+
+                    <div className="ct-store-items">
+                      {(group.items || []).map((item) => (
+                        <div className="ct-item-row" key={item.id}>
+                          <div className="ct-item-img">
+                            <img src={getImageUrl(item.image)} alt={item.name} />
+                          </div>
+
+                          <div className="ct-item-info">
+                            <Link to={`/product/${item.id}`} className="ct-item-name">
+                              {item.name}
+                            </Link>
+                            {item.category && (
+                              <span className="ct-item-cat">{item.category}</span>
+                            )}
+                            <div className="ct-item-price mt-1">
+                              {formatPrice(item.price)}
+                            </div>
+                          </div>
+
+                          <div className="ct-qty">
+                            <button
+                              onClick={() =>
+                                updateQuantity(item.id, Number(item.quantity) - 1)
+                              }
+                              disabled={item.quantity <= 1}
+                              aria-label="Decrease quantity"
+                            >
+                              <FaMinus size={10} />
+                            </button>
+                            <span>{item.quantity}</span>
+                            <button
+                              onClick={() =>
+                                updateQuantity(item.id, Number(item.quantity) + 1)
+                              }
+                              aria-label="Increase quantity"
+                            >
+                              <FaPlus size={10} />
+                            </button>
+                          </div>
+
+                          <div className="ct-item-subtotal">
+                            {formatPrice(item.price * item.quantity)}
+                          </div>
+
+                          <button
+                            className="ct-remove-btn"
+                            onClick={() => removeFromCart(item.id)}
+                            aria-label="Remove item"
+                          >
+                            <FaTrash size={13} />
+                          </button>
+                        </div>
+                      ))}
                     </div>
 
-                    <button
-                      className="ct-remove-btn"
-                      onClick={() => removeFromCart(item.id)}
-                      aria-label="Remove item"
-                    >
-                      <FaTrash size={13} />
-                    </button>
+                    <div className="ct-store-footer">
+                      <div className="ct-store-footer-row">
+                        <span>Items Subtotal:</span>
+                        <strong>{formatPrice(group.subtotal)}</strong>
+                      </div>
+                      <div className="ct-store-footer-row">
+                        <span>Delivery Fee:</span>
+                        <span>{formatPrice(group.delivery_charge)}</span>
+                      </div>
+                      <div className="ct-store-footer-total">
+                        <span>{group.store_name} Subtotal:</span>
+                        <span className="ct-store-footer-amount">
+                          {formatPrice(group.store_total || (Number(group.subtotal) + Number(group.delivery_charge)))}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 ))}
+              </>
+            ) : (
+              /* Single Store Clean View */
+              <div className="ct-items-card mb-3">
+                <div className="ct-items-head">
+                  <h5>
+                    Cart Items ({cartItems.length})
+                    {storeGroups[0]?.store_name && (
+                      <span style={{ fontSize: "0.85rem", fontWeight: 500, opacity: 0.9, marginLeft: 8 }}>
+                        • {storeGroups[0].store_name}
+                      </span>
+                    )}
+                  </h5>
+                  <button className="ct-clear-btn" onClick={clearCart}>
+                    <FaTrash size={11} /> Clear Cart
+                  </button>
+                </div>
+
+                <div>
+                  {cartItems.map((item) => (
+                    <div className="ct-item-row" key={item.id}>
+                      <div className="ct-item-img">
+                        <img src={getImageUrl(item.image)} alt={item.name} />
+                      </div>
+
+                      <div className="ct-item-info">
+                        <Link to={`/product/${item.id}`} className="ct-item-name">
+                          {item.name}
+                        </Link>
+                        {item.category && (
+                          <span className="ct-item-cat">{item.category}</span>
+                        )}
+                        <div className="ct-item-price mt-1">
+                          {formatPrice(item.price)}
+                        </div>
+                      </div>
+
+                      <div className="ct-qty">
+                        <button
+                          onClick={() =>
+                            updateQuantity(item.id, Number(item.quantity) - 1)
+                          }
+                          disabled={item.quantity <= 1}
+                          aria-label="Decrease quantity"
+                        >
+                          <FaMinus size={10} />
+                        </button>
+                        <span>{item.quantity}</span>
+                        <button
+                          onClick={() =>
+                            updateQuantity(item.id, Number(item.quantity) + 1)
+                          }
+                          aria-label="Increase quantity"
+                        >
+                          <FaPlus size={10} />
+                        </button>
+                      </div>
+
+                      <div className="ct-item-subtotal">
+                        {formatPrice(item.price * item.quantity)}
+                      </div>
+
+                      <button
+                        className="ct-remove-btn"
+                        onClick={() => removeFromCart(item.id)}
+                        aria-label="Remove item"
+                      >
+                        <FaTrash size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             <Link to="/products" className="ct-continue">
               <FaArrowLeft size={13} /> Continue Shopping
@@ -393,22 +608,46 @@ const Cart = () => {
                 <div className="ct-divider" />
 
                 <div className="ct-row">
-                  <span className="label">Subtotal</span>
+                  <span className="label">Items Subtotal</span>
                   <span className="value">{formatPrice(cartTotal)}</span>
                 </div>
 
+                {isMultiStore && storeGroups.length > 1 ? (
+                  <>
+                    <div className="ct-row">
+                      <span className="label">Delivery ({storesCount || storeGroups.length} stores)</span>
+                      <span className="value">
+                        {distanceLoading ? (
+                          <span className="text-muted small">Calculating...</span>
+                        ) : (
+                          formatPrice(shippingCost)
+                        )}
+                      </span>
+                    </div>
 
-
-                <div className="ct-row">
-                  <span className="label">Shipping</span>
-                  <span className="value">
-                    {distanceLoading ? (
-                      <span className="text-muted small">Calculating...</span>
-                    ) : (
-                      formatPrice(shippingCost)
-                    )}
-                  </span>
-                </div>
+                    <div className="p-2 mb-2 rounded" style={{ background: "#f8fafd", border: "1px solid #edf2f7", fontSize: "0.78rem" }}>
+                      {storeGroups.map((g, idx) => (
+                        <div key={g.vendor_id || idx} className="d-flex justify-content-between text-muted py-1">
+                          <span className="text-truncate me-2" style={{ maxWidth: "160px" }}>
+                            • {g.store_name}
+                          </span>
+                          <span>{formatPrice(g.delivery_charge)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="ct-row">
+                    <span className="label">Shipping</span>
+                    <span className="value">
+                      {distanceLoading ? (
+                        <span className="text-muted small">Calculating...</span>
+                      ) : (
+                        formatPrice(shippingCost)
+                      )}
+                    </span>
+                  </div>
+                )}
 
                 {isAuthenticated && selectedAddress && (
                   <div className="small text-muted mb-2" style={{ fontSize: "0.75rem", marginTop: "-4px" }}>
@@ -424,7 +663,7 @@ const Cart = () => {
                 <div className="ct-divider" />
 
                 <div className="ct-total-row">
-                  <span className="label">Total</span>
+                  <span className="label">Grand Total</span>
                   <span className="value">{formatPrice(finalTotal)}</span>
                 </div>
 

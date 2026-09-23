@@ -489,12 +489,12 @@ const Header = () => {
       <div className="rc-topbar text-white py-2 d-none d-md-block">
         <div className="container d-flex align-items-center justify-content-between">
           <span>
-            🚚 Free shipping on orders over $50 — code{" "}
-            <strong className="text-white">FREESHIP</strong>
+            ✨ 100% satisfaction guaranteed — easy returns,{" "}
+            <strong className="text-white">NO HASSLE</strong>
           </span>
           <div className="d-flex gap-3">
-            <a href="tel:1-800-RECOMM">📞 1-800-RECOMM</a>
-            <a href="mailto:info@recomm.com">✉️ info@recomm.com</a>
+            <a href="tel:+91 (0261) 234-5678">📞 +91 (0261) 234-5678</a>
+            <a href="mailto:grievance@recomm.in">📧 grievance@recomm.in</a>
           </div>
         </div>
       </div>
@@ -745,7 +745,12 @@ const Header = () => {
                 onClick={closeMenu}
                 className="rc-brand d-flex align-items-center text-decoration-none"
               >
-                <img src={logoDark} alt="Recomm Logo" className="rc-brand-img" style={{ height: "50px" }} />
+                <img
+                  src={logoDark}
+                  alt="Recomm Logo"
+                  className="rc-brand-img"
+                  style={{ height: "50px" }}
+                />
               </Link>
               <button
                 className="rc-drawer-close"

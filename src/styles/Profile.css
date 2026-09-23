@@ -1,6 +1,8 @@
 /* ==========================================================================
-   Profile — enhanced, mobile-first styles
-   (same design language as Checkout.css / OrderConfirmation.css)
+   Profile — complete, mobile-first responsive stylesheet
+   Covers: hero, sidebar/nav, profile info, orders, addresses, wishlist,
+   saved stores, shopping lists, security, and all modals.
+   Breakpoints: <375, <480, <576, <768, <992, <1200, 1400+
    ========================================================================== */
 
 .profile-page {
@@ -13,16 +15,44 @@
     --pf-muted: #6B7280;
     --pf-radius-lg: 18px;
     --pf-radius-md: 12px;
+    --pf-radius-sm: 8px;
     --pf-shadow: 0 6px 24px rgba(0, 32, 78, 0.08);
+    --pf-shadow-sm: 0 2px 8px rgba(0, 32, 78, 0.05);
+    --pf-shadow-hover: 0 10px 28px rgba(0, 32, 78, 0.12);
     background: #F6F8FA;
     min-height: 100vh;
+    overflow-x: hidden;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .profile-page * {
     box-sizing: border-box;
 }
 
-/* ---------- hero ---------- */
+.profile-page img {
+    max-width: 100%;
+    height: auto;
+}
+
+.profile-page button,
+.profile-page input,
+.profile-page a {
+    font-family: inherit;
+}
+
+/* Accessible focus ring everywhere, keyboard only */
+.profile-page a:focus-visible,
+.profile-page button:focus-visible,
+.profile-page input:focus-visible,
+.profile-page [tabindex]:focus-visible {
+    outline: 2px solid var(--pf-green);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+/* ==========================================================================
+   Hero
+   ========================================================================== */
 .pf-hero {
     background: linear-gradient(135deg, var(--pf-navy) 0%, #003a7a 100%);
     padding: 2.25rem 0 4.5rem;
@@ -32,6 +62,7 @@
     color: #fff;
     font-weight: 800;
     font-size: 1.7rem;
+    letter-spacing: -0.01em;
 }
 
 .pf-breadcrumb {
@@ -39,8 +70,9 @@
 }
 
 .pf-breadcrumb a {
-    color: rgba(255, 255, 255, 0.7);
+    color: rgba(255, 255, 255, 0.72);
     text-decoration: none;
+    transition: color 0.15s ease;
 }
 
 .pf-breadcrumb a:hover {
@@ -57,11 +89,23 @@
     font-weight: 700;
 }
 
+/* ==========================================================================
+   Shell / container
+   ========================================================================== */
 .pf-shell {
     margin-top: -3.25rem;
 }
 
-/* ---------- shared card ---------- */
+/* Comfortable max-width on large screens so cards don't stretch too wide */
+@media (min-width: 1400px) {
+    .pf-shell.container {
+        max-width: 1240px;
+    }
+}
+
+/* ==========================================================================
+   Shared card
+   ========================================================================== */
 .pf-card {
     background: #fff;
     border: none;
@@ -69,7 +113,9 @@
     box-shadow: var(--pf-shadow);
 }
 
-/* ---------- user summary card ---------- */
+/* ==========================================================================
+   User summary card
+   ========================================================================== */
 .pf-user-card {
     padding: 1.75rem 1.5rem;
     text-align: center;
@@ -116,6 +162,12 @@
     border: 2px solid #fff;
     cursor: pointer;
     font-size: 0.7rem;
+    transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.pf-avatar-edit:hover {
+    background: #003a7a;
+    transform: scale(1.06);
 }
 
 .pf-avatar-edit input {
@@ -130,6 +182,7 @@
     font-weight: 700;
     font-size: 1.15rem;
     margin-bottom: 2px;
+    word-break: break-word;
 }
 
 .pf-email {
@@ -148,6 +201,7 @@
 
 .pf-stats .pf-stat {
     flex: 1;
+    min-width: 0;
 }
 
 .pf-stats .pf-stat+.pf-stat {
@@ -169,7 +223,9 @@
     font-weight: 600;
 }
 
-/* ---------- desktop vertical nav ---------- */
+/* ==========================================================================
+   Desktop vertical nav
+   ========================================================================== */
 .pf-nav-item {
     display: flex;
     align-items: center;
@@ -183,7 +239,8 @@
     color: #45526b;
     border-left: 3px solid transparent;
     text-align: left;
-    transition: background-color 0.15s ease, color 0.15s ease;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    cursor: pointer;
 }
 
 .pf-nav-item:hover {
@@ -205,9 +262,19 @@
 .pf-nav-item .pf-chevron {
     margin-left: auto;
     opacity: 0.4;
+    flex-shrink: 0;
+    transition: transform 0.15s ease, opacity 0.15s ease;
 }
 
-/* ---------- mobile horizontal nav ---------- */
+.pf-nav-item:hover .pf-chevron,
+.pf-nav-item.active .pf-chevron {
+    opacity: 0.9;
+    transform: translateX(2px);
+}
+
+/* ==========================================================================
+   Mobile horizontal nav (chip bar)
+   ========================================================================== */
 .pf-nav-mobile {
     display: flex;
     gap: 0.5rem;
@@ -215,6 +282,7 @@
     padding: 0.1rem 0.1rem 0.9rem;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
+    scroll-snap-type: x proximity;
 }
 
 .pf-nav-mobile::-webkit-scrollbar {
@@ -234,6 +302,9 @@
     font-size: 0.85rem;
     font-weight: 600;
     white-space: nowrap;
+    scroll-snap-align: start;
+    min-height: 40px;
+    transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .pf-chip.active {
@@ -243,7 +314,9 @@
     box-shadow: 0 6px 14px rgba(29, 163, 78, 0.3);
 }
 
-/* ---------- logout ---------- */
+/* ==========================================================================
+   Logout
+   ========================================================================== */
 .pf-logout-btn {
     width: 100%;
     display: inline-flex;
@@ -251,6 +324,7 @@
     justify-content: center;
     gap: 8px;
     padding: 11px;
+    min-height: 44px;
     border-radius: var(--pf-radius-md);
     border: 1.5px solid #f1b3b3;
     background: #fff;
@@ -258,14 +332,17 @@
     font-weight: 700;
     font-size: 0.92rem;
     cursor: pointer;
-    transition: background 0.15s ease;
+    transition: background 0.15s ease, box-shadow 0.15s ease;
 }
 
 .pf-logout-btn:hover {
     background: #fdf1f1;
+    box-shadow: var(--pf-shadow-sm);
 }
 
-/* ---------- section header ---------- */
+/* ==========================================================================
+   Section header
+   ========================================================================== */
 .pf-section-header {
     background: var(--pf-navy);
     color: #fff;
@@ -282,16 +359,25 @@
     margin: 0;
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     font-weight: 700;
     font-size: 1rem;
 }
 
-/* ---------- alerts ---------- */
+/* Badges/pills placed inside a dark section header (order/wishlist counts etc.) */
+.pf-section-header .badge {
+    font-size: 0.78rem;
+}
+
+/* ==========================================================================
+   Alerts
+   ========================================================================== */
 .pf-alert {
     border-radius: var(--pf-radius-md);
     padding: 12px 16px;
     font-size: 0.9rem;
     margin-bottom: 14px;
+    line-height: 1.5;
 }
 
 .pf-alert--success {
@@ -306,7 +392,9 @@
     border: 1px solid #F5C2C0;
 }
 
-/* ---------- buttons ---------- */
+/* ==========================================================================
+   Buttons
+   ========================================================================== */
 .pf-btn {
     display: inline-flex;
     align-items: center;
@@ -314,13 +402,14 @@
     gap: 7px;
     white-space: nowrap;
     padding: 9px 16px;
+    min-height: 40px;
     border-radius: var(--pf-radius-md);
     font-weight: 700;
     font-size: 0.85rem;
     border: 1.5px solid transparent;
     cursor: pointer;
     text-decoration: none;
-    transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease, background 0.15s ease;
 }
 
 .pf-btn:disabled {
@@ -383,6 +472,7 @@
 
 .pf-btn--sm {
     padding: 7px 12px;
+    min-height: 34px;
     font-size: 0.78rem;
 }
 
@@ -419,7 +509,19 @@
     border-radius: var(--pf-radius-sm);
 }
 
-/* ---------- profile info grid ---------- */
+/* Generic Bootstrap-classed action buttons used inside order/list/store cards
+   (btn btn-sm ...) — keep tap targets comfortable and prevent squishing */
+.profile-page .btn-sm {
+    min-height: 32px;
+}
+
+.profile-page .btn.rounded-circle {
+    flex-shrink: 0;
+}
+
+/* ==========================================================================
+   Profile info grid (view + edit)
+   ========================================================================== */
 .pf-info-grid {
     padding: 1.5rem;
 }
@@ -435,9 +537,10 @@
     gap: 0.85rem;
     padding: 0.9rem 0;
     border-bottom: 1px solid var(--pf-border);
+    min-width: 0;
 }
 
-.pf-info-cols .pf-info-item:nth-last-child(-n+1) {
+.pf-info-cols .pf-info-item:nth-last-child(-n + 1) {
     border-bottom: none;
 }
 
@@ -474,7 +577,9 @@
     font-weight: 500;
 }
 
-/* ---------- edit form ---------- */
+/* ==========================================================================
+   Edit / address form
+   ========================================================================== */
 .pf-form-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -500,8 +605,12 @@
     border: 1.5px solid var(--pf-border);
     border-radius: var(--pf-radius-md);
     padding: 10px 14px;
-    font-size: 0.9rem;
+    min-height: 44px;
+    font-size: 16px;
+    /* prevents iOS auto-zoom on focus */
     font-family: inherit;
+    background: #fff;
+    color: #1f2937;
 }
 
 .pf-input:focus {
@@ -510,22 +619,31 @@
     box-shadow: 0 0 0 3px rgba(29, 163, 78, 0.15);
 }
 
+.pf-input::placeholder {
+    color: #a3adc2;
+}
+
 .pf-hint {
     color: var(--pf-muted);
     font-size: 0.8rem;
     display: flex;
     align-items: center;
     gap: 6px;
+    line-height: 1.5;
 }
 
-/* ---------- orders table / cards ---------- */
+/* ==========================================================================
+   Orders — legacy table (kept for compatibility if used elsewhere)
+   ========================================================================== */
 .pf-table-wrap {
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .pf-table {
     width: 100%;
     border-collapse: collapse;
+    min-width: 560px;
 }
 
 .pf-table th {
@@ -562,37 +680,30 @@
 
 .pf-badge--pending {
     background: #6c757d;
-    color: #fff;
 }
 
 .pf-badge--confirmed {
     background: #0288d1;
-    color: #fff;
 }
 
 .pf-badge--processing {
     background: #7b1fa2;
-    color: #fff;
 }
 
 .pf-badge--packed {
     background: #e65100;
-    color: #fff;
 }
 
 .pf-badge--out-for-delivery {
     background: #00796b;
-    color: #fff;
 }
 
 .pf-badge--delivered {
     background: #2E9E5B;
-    color: #fff;
 }
 
 .pf-badge--cancelled {
     background: #D9534F;
-    color: #fff;
 }
 
 .pf-badge--warning {
@@ -616,6 +727,8 @@
     justify-content: space-between;
     align-items: flex-start;
     margin-bottom: 8px;
+    gap: 8px;
+    flex-wrap: wrap;
 }
 
 .pf-order-card-meta {
@@ -624,12 +737,16 @@
     color: var(--pf-muted);
     font-size: 0.8rem;
     margin-bottom: 10px;
+    flex-wrap: wrap;
+    gap: 6px;
 }
 
 .pf-order-card-footer {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
 }
 
 .pf-empty-state {
@@ -641,7 +758,37 @@
     color: #cfd6e0;
 }
 
-/* ---------- addresses ---------- */
+/* ==========================================================================
+   Generic card polish — applies to the Bootstrap-classed cards used for
+   order history, wishlist tiles, saved stores and shopping lists (these
+   are built with utility classes rather than a dedicated .pf- class).
+   ========================================================================== */
+.profile-page .rounded-3.border,
+.profile-page .bg-white.rounded-3 {
+    transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+
+    .profile-page .bg-white.rounded-3.position-relative:hover,
+    .profile-page .bg-white.rounded-3.h-100:hover {
+        box-shadow: var(--pf-shadow-hover);
+    }
+}
+
+/* Keep long product / store / order titles from breaking layout */
+.profile-page .text-truncate {
+    min-width: 0;
+}
+
+/* Order status filter pill bar: smoother edge fade on mobile scroll */
+.profile-page .overflow-auto {
+    -webkit-overflow-scrolling: touch;
+}
+
+/* ==========================================================================
+   Addresses
+   ========================================================================== */
 .pf-address-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -653,6 +800,7 @@
     border-radius: var(--pf-radius-md);
     padding: 1rem;
     position: relative;
+    min-width: 0;
 }
 
 .pf-address-card.is-default {
@@ -677,6 +825,9 @@
     font-weight: 700;
     font-size: 0.95rem;
     margin-bottom: 2px;
+    padding-right: 70px;
+    /* keep clear of default badge */
+    word-break: break-word;
 }
 
 .pf-address-phone {
@@ -690,6 +841,7 @@
     color: #333;
     line-height: 1.5;
     margin-bottom: 12px;
+    word-break: break-word;
 }
 
 .pf-address-actions {
@@ -698,12 +850,19 @@
     flex-wrap: wrap;
 }
 
+.pf-address-actions .pf-btn {
+    flex: 1 1 auto;
+    min-width: 92px;
+}
+
 .pf-address-form-box {
     border: 1px solid var(--pf-border);
     border-radius: var(--pf-radius-md);
     padding: 1.1rem;
     background: #F9FAFB;
     margin-bottom: 1.5rem;
+    max-width: 100%;
+    overflow: hidden;
 }
 
 .pf-address-form-box h6 {
@@ -722,6 +881,7 @@
 .pf-checkbox-row input {
     width: 17px;
     height: 17px;
+    flex-shrink: 0;
     accent-color: var(--pf-green);
 }
 
@@ -730,7 +890,9 @@
     color: #333;
 }
 
-/* ---------- security ---------- */
+/* ==========================================================================
+   Security
+   ========================================================================== */
 .pf-toggle-row {
     display: flex;
     justify-content: space-between;
@@ -743,10 +905,64 @@
     width: 44px;
     height: 24px;
     accent-color: var(--pf-green);
+    flex-shrink: 0;
 }
 
 /* ==========================================================================
-   Tablet / mobile
+   Modals (order delete, create/rename/delete list) — generic overlay
+   handling so every modal in this page behaves consistently and never
+   overflows the viewport on small screens.
+   ========================================================================== */
+.profile-page>.position-fixed.top-0.start-0.w-100.h-100 {
+    overflow-y: auto;
+}
+
+.profile-page>.position-fixed.top-0.start-0.w-100.h-100>div {
+    max-height: 88vh;
+    overflow-y: auto;
+    margin: auto;
+    width: 100%;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* ==========================================================================
+   Thin, unobtrusive scrollbars for horizontal/vertical scroll areas
+   (webkit only — degrades gracefully elsewhere)
+   ========================================================================== */
+.profile-page ::-webkit-scrollbar {
+    height: 6px;
+    width: 6px;
+}
+
+.profile-page ::-webkit-scrollbar-thumb {
+    background: #d7dce4;
+    border-radius: 999px;
+}
+
+.profile-page ::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+/* ==========================================================================
+   Large desktop refinement (≥1200px)
+   ========================================================================== */
+@media (min-width: 1200px) {
+    .pf-user-card {
+        padding: 2rem 1.65rem;
+    }
+
+    .pf-info-grid,
+    .p-md-4 {
+        padding: 1.85rem !important;
+    }
+
+    .pf-hero h2 {
+        font-size: 1.85rem;
+    }
+}
+
+/* ==========================================================================
+   Tablet (≤991.98px) — sidebar collapses, mobile chip nav takes over
    ========================================================================== */
 @media (max-width: 991.98px) {
     .pf-hero {
@@ -756,8 +972,15 @@
     .pf-shell {
         margin-top: -2.5rem;
     }
+
+    .pf-user-card {
+        padding: 1.5rem 1.25rem;
+    }
 }
 
+/* ==========================================================================
+   Mobile (≤767.98px)
+   ========================================================================== */
 @media (max-width: 767.98px) {
 
     .pf-info-cols,
@@ -773,15 +996,63 @@
     .pf-info-cols .pf-info-item:last-child {
         border-bottom: none;
     }
+
+    .pf-section-header {
+        border-radius: var(--pf-radius-md) var(--pf-radius-md) 0 0;
+    }
+
+    .pf-section-header h5 {
+        font-size: 0.95rem;
+        gap: 6px;
+    }
+
+    /* Give action buttons room to wrap onto their own line cleanly */
+    .pf-section-header>div {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    /* Order card price block: keep left-aligned under the item row on
+       narrow phones instead of being squeezed to the far right */
+    .profile-page .text-md-end {
+        text-align: left !important;
+    }
+
+    /* Address card action buttons: full-width stacked feel on very
+       narrow cards while staying flexible on slightly wider ones */
+    .pf-address-actions .pf-btn {
+        min-width: 80px;
+    }
 }
 
+/* ==========================================================================
+   Small phones (≤575.98px)
+   ========================================================================== */
 @media (max-width: 575.98px) {
+    .pf-hero {
+        padding: 1.5rem 0 3.25rem;
+    }
+
     .pf-hero h2 {
         font-size: 1.35rem;
     }
 
+    .pf-breadcrumb {
+        font-size: 0.8rem;
+    }
+
     .pf-user-card {
         padding: 1.4rem 1.1rem;
+    }
+
+    .pf-avatar-wrap,
+    .pf-avatar {
+        width: 80px;
+        height: 80px;
+    }
+
+    .pf-name {
+        font-size: 1.05rem;
     }
 
     .pf-section-header {
@@ -799,10 +1070,105 @@
     .pf-address-form-box {
         padding: 0.9rem;
     }
+
+    .pf-btn {
+        font-size: 0.82rem;
+        padding: 8px 13px;
+    }
+
+    .pf-chip {
+        font-size: 0.8rem;
+        padding: 0.5rem 0.85rem;
+    }
+
+    /* Modals become near-full-width sheets, anchored toward the bottom
+       for an easier one-thumb reach on small phones */
+    .profile-page>.position-fixed.top-0.start-0.w-100.h-100 {
+        align-items: flex-end !important;
+        padding: 0 !important;
+    }
+
+    .profile-page>.position-fixed.top-0.start-0.w-100.h-100>div {
+        max-height: 92vh;
+        width: 100%;
+        border-radius: 18px 18px 0 0 !important;
+        padding: 1.25rem !important;
+    }
 }
 
+/* ==========================================================================
+   Extra-small phones (≤420px)
+   ========================================================================== */
+@media (max-width: 420px) {
+    .pf-hero h2 {
+        font-size: 1.2rem;
+    }
+
+    .pf-user-card {
+        padding: 1.2rem 0.9rem;
+    }
+
+    .pf-avatar-wrap,
+    .pf-avatar {
+        width: 72px;
+        height: 72px;
+    }
+
+    .pf-stats .num {
+        font-size: 1.05rem;
+    }
+
+    .pf-stats .lbl {
+        font-size: 0.62rem;
+    }
+
+    .pf-nav-mobile {
+        gap: 0.4rem;
+    }
+
+    .pf-chip {
+        font-size: 0.76rem;
+        padding: 0.46rem 0.75rem;
+        gap: 0.3rem;
+    }
+
+    .pf-section-header {
+        padding: 0.8rem 0.9rem;
+    }
+
+    .pf-info-grid {
+        padding: 0.9rem;
+    }
+
+    .pf-label,
+    .pf-info-label {
+        font-size: 0.68rem;
+    }
+
+    .pf-info-value {
+        font-size: 0.88rem;
+    }
+
+    .pf-input {
+        padding: 9px 12px;
+    }
+
+    .pf-address-name {
+        padding-right: 60px;
+    }
+
+    /* Order card total price shouldn't fight for space with the badge row */
+    .profile-page .fw-bolder {
+        font-size: 1.1rem !important;
+    }
+}
+
+/* ==========================================================================
+   Reduced motion
+   ========================================================================== */
 @media (prefers-reduced-motion: reduce) {
-    .pf-btn {
-        transition: none;
+    .profile-page * {
+        transition: none !important;
+        scroll-behavior: auto !important;
     }
 }

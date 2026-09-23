@@ -62,11 +62,15 @@ const ProductService = {
     return res;
   },
 
-  searchProducts: async ({ search, categoryId, brand, minPrice, maxPrice, inStock, vendorId, sortBy, page, limit, latitude, longitude } = {}) => {
+  searchProducts: async ({ search, mode = "products", categoryId, brand, unit, availability, fulfilment, minPrice, maxPrice, inStock, vendorId, sortBy, page, limit, latitude, longitude } = {}) => {
     const params = {};
     if (search) params.search = search;
+    if (mode) params.mode = mode;
     if (categoryId) params.category_id = categoryId;
     if (brand) params.brand = brand;
+    if (unit) params.unit = unit;
+    if (availability) params.availability = availability;
+    if (fulfilment) params.fulfilment = fulfilment;
     if (minPrice !== undefined) params.min_price = minPrice;
     if (maxPrice !== undefined) params.max_price = maxPrice;
     if (inStock !== undefined) params.in_stock = inStock ? 1 : 0;
@@ -77,6 +81,26 @@ const ProductService = {
     if (latitude !== undefined) params.latitude = latitude;
     if (longitude !== undefined) params.longitude = longitude;
     return call(axiosInstance.get("/search_products", { params }));
+  },
+
+  getSearchSuggestions: async ({ q = "", latitude, longitude } = {}) => {
+    const params = { q };
+    if (latitude !== undefined) params.latitude = latitude;
+    if (longitude !== undefined) params.longitude = longitude;
+    return call(axiosInstance.get("/search_suggestions", { params }));
+  },
+
+  getRecentSearches: async () => {
+    return call(axiosInstance.get("/get_recent_searches"));
+  },
+
+  saveRecentSearch: async (query) => {
+    if (!query || !query.trim()) return { success: false };
+    return call(axiosInstance.post("/save_recent_search", { query: query.trim() }));
+  },
+
+  clearRecentSearches: async () => {
+    return call(axiosInstance.post("/clear_recent_searches"));
   },
 };
 

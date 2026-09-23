@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import {
   FaUser,
@@ -23,12 +23,22 @@ import {
   FaBox,
   FaTruck,
   FaBan,
+  FaStore,
+  FaListAlt,
+  FaPlus,
+  FaShoppingCart,
+  FaRoute,
+  FaChevronDown,
+  FaChevronUp,
+  FaHeadset,
 } from "react-icons/fa";
 import ProfileService from "../services/profileService";
 import OrderService from "../services/orderService";
+import StoreService from "../services/storeService";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
 import { useWishlist } from "../context/WishlistContext";
+import { useShoppingList } from "../context/ShoppingListContext";
 import { useOrder } from "../context/OrderContext";
 import { useToast } from "../context/ToastContext";
 import {
@@ -39,6 +49,7 @@ import {
 } from "../components/SkeletonLoaders";
 import { formatPrice, formatDate, formatStatus } from "../utils/helpers";
 import LocationPicker from "../components/LocationPicker";
+import OrderSupportModal from "../components/OrderSupportModal";
 import "../styles/Profile.css";
 
 const FALLBACK_IMG =
@@ -50,6 +61,16 @@ const Profile = () => {
   const { cartItemCount, addToCart } = useCart();
   const { wishlistItems, removeFromWishlist, loading: wishlistLoading } =
     useWishlist();
+  const {
+    lists: shoppingLists,
+    loading: shoppingListsLoading,
+    fetchLists: fetchShoppingLists,
+    createList,
+    renameList,
+    deleteList,
+    removeProductFromList,
+    addAllToCart,
+  } = useShoppingList();
   const { fetchOrders } = useOrder();
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -78,6 +99,23 @@ const Profile = () => {
   const [errorMessage, setErrorMessage] = useState("");
   const [orderToDelete, setOrderToDelete] = useState(null);
   const [hidingOrder, setHidingOrder] = useState(false);
+  const [supportModalOrder, setSupportModalOrder] = useState(null);
+
+  // Saved stores state
+  const [savedStores, setSavedStores] = useState([]);
+  const [savedStoresLoading, setSavedStoresLoading] = useState(false);
+  const [unsavingStoreId, setUnsavingStoreId] = useState(null);
+
+  // Shopping lists state
+  const [newListName, setNewListName] = useState("");
+  const [showCreateListModal, setShowCreateListModal] = useState(false);
+  const [creatingList, setCreatingList] = useState(false);
+  const [editingListId, setEditingListId] = useState(null);
+  const [editingListName, setEditingListName] = useState("");
+  const [savingRename, setSavingRename] = useState(false);
+  const [deletingListId, setDeletingListId] = useState(null);
+  const [addingAllListId, setAddingAllListId] = useState(null);
+  const [expandedLists, setExpandedLists] = useState({});
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -345,14 +383,128 @@ const Profile = () => {
     navigate("/");
   };
 
-  if (!isAuthenticated) return null;
+  // Saved Stores handlers
+  const loadSavedStores = useCallback(async () => {
+    setSavedStoresLoading(true);
+    try {
+      let coords = {};
+      try {
+        const saved = localStorage.getItem("customer_live_location");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.latitude && parsed.longitude) {
+            coords = { latitude: parsed.latitude, longitude: parsed.longitude };
+          }
+        }
+      } catch (e) {}
+
+      const res = await StoreService.getSavedStores(coords);
+      if (res.success && res.data?.stores) {
+        setSavedStores(res.data.stores);
+      } else {
+        setSavedStores([]);
+      }
+    } catch (err) {
+      console.error("Error fetching saved stores:", err);
+      setSavedStores([]);
+    } finally {
+      setSavedStoresLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "saved_stores" && isAuthenticated) {
+      loadSavedStores();
+    }
+  }, [activeTab, isAuthenticated, loadSavedStores]);
+
+  useEffect(() => {
+    if (activeTab === "shopping_lists" && isAuthenticated) {
+      fetchShoppingLists();
+    }
+  }, [activeTab, isAuthenticated, fetchShoppingLists]);
+
+  const handleUnsaveStore = async (storeId, storeName) => {
+    setUnsavingStoreId(storeId);
+    try {
+      const res = await StoreService.unsaveStore(storeId);
+      if (res.success) {
+        setSavedStores((prev) => prev.filter((s) => s.id !== storeId));
+        showToast(`Removed "${storeName || "store"}" from saved stores`, "info");
+      } else {
+        showToast(res.error || "Failed to unsave store", "error");
+      }
+    } catch (err) {
+      showToast("Error unsaving store", "error");
+    } finally {
+      setUnsavingStoreId(null);
+    }
+  };
+
+  // Shopping lists handlers
+  const handleToggleExpandList = (listId) => {
+    setExpandedLists((prev) => ({
+      ...prev,
+      [listId]: prev[listId] === false ? true : false,
+    }));
+  };
+
+  const handleCreateListSubmit = async (e) => {
+    e.preventDefault();
+    const trimmed = newListName.trim();
+    if (!trimmed) return;
+    setCreatingList(true);
+    const created = await createList(trimmed);
+    setCreatingList(false);
+    if (created) {
+      setNewListName("");
+      setShowCreateListModal(false);
+      if (created.id) {
+        setExpandedLists((prev) => ({ ...prev, [created.id]: true }));
+      }
+    }
+  };
+
+  const handleStartRename = (list) => {
+    setEditingListId(list.id);
+    setEditingListName(list.name);
+  };
+
+  const handleSaveRename = async (listId) => {
+    const trimmed = editingListName.trim();
+    if (!trimmed) return;
+    setSavingRename(true);
+    const success = await renameList(listId, trimmed);
+    setSavingRename(false);
+    if (success) {
+      setEditingListId(null);
+      setEditingListName("");
+    }
+  };
+
+  const handleConfirmDeleteList = async (listId) => {
+    await deleteList(listId);
+    setDeletingListId(null);
+  };
+
+  const handleAddAllToCartClick = async (listId) => {
+    setAddingAllListId(listId);
+    await addAllToCart(listId);
+    setAddingAllListId(null);
+  };
+
+  const handleRemoveItem = async (listId, productId) => {
+    await removeProductFromList(listId, productId);
+  };
 
   const tabs = [
     { id: "profile", label: "My Profile", icon: FaUser },
     { id: "addresses", label: "Addresses", icon: FaMapMarkerAlt },
     { id: "orders", label: "My Orders", icon: FaShoppingBag },
     { id: "wishlist", label: "Wishlist", icon: FaHeart },
-    { id: "security", label: "Security", icon: FaLock },
+    { id: "saved_stores", label: "Saved Stores", icon: FaStore },
+    { id: "shopping_lists", label: "Shopping Lists", icon: FaListAlt },
+    // { id: "security", label: "Security", icon: FaLock },
   ];
 
   const getStatusConfig = (status) => {
@@ -441,6 +593,8 @@ const Profile = () => {
       setHidingOrder(false);
     }
   };
+
+  if (!isAuthenticated) return null;
 
   return (
     <div className="profile-page">
@@ -945,6 +1099,46 @@ const Profile = () => {
                                     )}
                                   </div>
 
+                                  {order.stores && order.stores.length > 0 ? (
+                                    <div className="d-flex align-items-center flex-wrap gap-1 mt-1">
+                                      {order.stores.map((st, sIdx) => (
+                                        <Link
+                                          key={sIdx}
+                                          to={`/store/${st.vendor_id}`}
+                                          className="badge px-2 py-0.5 rounded-pill text-decoration-none"
+                                          style={{
+                                            backgroundColor: "#f8fafc",
+                                            color: "#00204E",
+                                            border: "1px solid #cbd5e1",
+                                            fontSize: "0.72rem",
+                                            fontWeight: 600,
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            gap: "3px",
+                                          }}
+                                          title={`Sold by ${st.store_name} - Click to visit store`}
+                                        >
+                                          🏪 {st.store_name}
+                                        </Link>
+                                      ))}
+                                    </div>
+                                  ) : order.store_names && order.store_names.length > 0 ? (
+                                    <div className="d-flex align-items-center gap-1 mt-1">
+                                      <span
+                                        className="badge px-2 py-0.5 rounded-pill"
+                                        style={{
+                                          backgroundColor: "#f8fafc",
+                                          color: "#00204E",
+                                          border: "1px solid #cbd5e1",
+                                          fontSize: "0.72rem",
+                                          fontWeight: 600,
+                                        }}
+                                      >
+                                        🏪 {order.store_names.join(", ")}
+                                      </span>
+                                    </div>
+                                  ) : null}
+
                                   <div className="d-flex flex-wrap align-items-center gap-2 mt-1" style={{ fontSize: "0.8rem", color: "#64748B" }}>
                                     <span>
                                       Payment: <strong className="text-secondary text-uppercase">{order.payment_method || "COD"}</strong>
@@ -1019,6 +1213,22 @@ const Profile = () => {
                                   <FaEye size={12} />
                                   <span>View</span>
                                 </Link>
+
+                                <button
+                                  type="button"
+                                  onClick={() => setSupportModalOrder(order)}
+                                  className="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1.5 px-3 py-1.5 fw-semibold"
+                                  style={{
+                                    fontSize: "0.82rem",
+                                    borderRadius: "6px",
+                                    borderColor: "#16a34a",
+                                    color: "#16a34a",
+                                  }}
+                                  title="Need help or have an issue with this order?"
+                                >
+                                  <FaHeadset size={12} />
+                                  <span>Need Help?</span>
+                                </button>
 
                                 {isDelivered ? (
                                   <a
@@ -1443,6 +1653,420 @@ const Profile = () => {
               </div>
             )}
 
+            {/* Saved Stores Tab */}
+            {activeTab === "saved_stores" && (
+              <div className="pf-card overflow-hidden">
+                <div className="pf-section-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+                  <div className="d-flex align-items-center gap-2">
+                    <FaStore style={{ color: "#34A129" }} />
+                    <h5 className="mb-0 fw-bold">Saved Stores</h5>
+                    <span
+                      className="badge rounded-pill"
+                      style={{
+                        backgroundColor: "#F1F5F9",
+                        color: "var(--pf-navy)",
+                        fontSize: "0.8rem",
+                        fontWeight: 700,
+                      }}
+                    >
+                      {savedStores.length}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-3 p-md-4">
+                  {savedStoresLoading ? (
+                    <ProductGridSkeleton count={4} colClass="col-12 col-md-6" />
+                  ) : savedStores.length === 0 ? (
+                    <div className="pf-empty-state py-5 text-center">
+                      <div
+                        className="d-inline-flex align-items-center justify-content-center rounded-circle mb-3"
+                        style={{
+                          width: "72px",
+                          height: "72px",
+                          backgroundColor: "#f0fdf4",
+                          color: "#34A129",
+                        }}
+                      >
+                        <FaStore size={36} />
+                      </div>
+                      <h5 className="fw-bold mb-1" style={{ color: "var(--pf-navy)" }}>
+                        No Saved Stores Yet
+                      </h5>
+                      <p className="text-muted mb-3" style={{ fontSize: "0.9rem" }}>
+                        Save your favorite neighborhood stores to reorder quickly anytime!
+                      </p>
+                      <Link to="/" className="pf-btn pf-btn--solid">
+                        Discover Stores
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="row g-3">
+                      {savedStores.map((s) => (
+                        <div key={s.id} className="col-12 col-md-6">
+                          <div
+                            className="bg-white rounded-3 p-3 h-100 d-flex flex-column justify-content-between position-relative"
+                            style={{
+                              border: "1.5px solid #E2E8F0",
+                              boxShadow: "0 2px 8px rgba(0, 32, 78, 0.04)",
+                              borderRadius: "14px",
+                            }}
+                          >
+                            <div className="d-flex gap-3 align-items-start mb-3">
+                              <div
+                                className="rounded-3 overflow-hidden flex-shrink-0"
+                                style={{
+                                  width: "64px",
+                                  height: "64px",
+                                  backgroundColor: "#f8fafc",
+                                  border: "1px solid #e2e8f0",
+                                }}
+                              >
+                                <img
+                                  src={s.store_photo_url || FALLBACK_IMG}
+                                  alt={s.store_name}
+                                  className="w-100 h-100 object-fit-cover"
+                                  onError={(e) => {
+                                    e.target.onerror = null;
+                                    e.target.src = FALLBACK_IMG;
+                                  }}
+                                />
+                              </div>
+                              <div className="flex-grow-1" style={{ minWidth: 0 }}>
+                                <div className="d-flex align-items-center justify-content-between gap-1 mb-1">
+                                  <Link
+                                    to={`/store/${s.id}`}
+                                    className="fw-bold text-truncate text-decoration-none"
+                                    style={{ color: "var(--pf-navy)", fontSize: "1rem" }}
+                                    title={s.store_name}
+                                  >
+                                    {s.store_name}
+                                  </Link>
+                                  {s.is_open ? (
+                                    <span
+                                      className="badge bg-success-subtle text-success py-0 px-2"
+                                      style={{ fontSize: "0.68rem" }}
+                                    >
+                                      Open
+                                    </span>
+                                  ) : (
+                                    <span
+                                      className="badge bg-danger-subtle text-danger py-0 px-2"
+                                      style={{ fontSize: "0.68rem" }}
+                                    >
+                                      Closed
+                                    </span>
+                                  )}
+                                </div>
+
+                                {s.category_summary && (
+                                  <div
+                                    className="text-muted small text-truncate mb-1"
+                                    style={{ fontSize: "0.78rem" }}
+                                  >
+                                    {s.category_summary}
+                                  </div>
+                                )}
+
+                                <div
+                                  className="d-flex flex-wrap gap-2 text-muted small"
+                                  style={{ fontSize: "0.75rem" }}
+                                >
+                                  {s.address && (
+                                    <span
+                                      className="d-inline-flex align-items-center gap-1 text-truncate"
+                                      style={{ maxWidth: "160px" }}
+                                    >
+                                      <FaMapMarkerAlt size={10} style={{ color: "#34A129" }} />
+                                      {s.address}
+                                    </span>
+                                  )}
+                                  {s.distance_text && (
+                                    <span className="d-inline-flex align-items-center gap-1">
+                                      <FaRoute size={10} style={{ color: "#34A129" }} />
+                                      {s.distance_text}
+                                    </span>
+                                  )}
+                                  {s.total_products > 0 && (
+                                    <span className="text-secondary fw-semibold">
+                                      • {s.total_products} products
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="d-flex align-items-center justify-content-between pt-2 border-top gap-2">
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1 py-1 px-2"
+                                style={{ fontSize: "0.78rem", borderRadius: "8px" }}
+                                onClick={() => handleUnsaveStore(s.id, s.store_name)}
+                                disabled={unsavingStoreId === s.id}
+                              >
+                                <FaTrashAlt size={11} />
+                                {unsavingStoreId === s.id ? "Removing..." : "Unsave"}
+                              </button>
+
+                              <Link
+                                to={`/store/${s.id}`}
+                                className="btn btn-sm btn-success text-white d-inline-flex align-items-center gap-1 py-1 px-3"
+                                style={{
+                                  fontSize: "0.78rem",
+                                  borderRadius: "8px",
+                                  fontWeight: 600,
+                                }}
+                              >
+                                <FaStore size={12} /> Visit Store
+                              </Link>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Shopping Lists Tab */}
+            {activeTab === "shopping_lists" && (
+              <div className="pf-card overflow-hidden">
+                <div className="pf-section-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+                  <div className="d-flex align-items-center gap-2">
+                    <FaListAlt style={{ color: "#0284c7" }} />
+                    <h5 className="mb-0 fw-bold">My Shopping Lists</h5>
+                    <span
+                      className="badge rounded-pill"
+                      style={{
+                        backgroundColor: "#F1F5F9",
+                        color: "var(--pf-navy)",
+                        fontSize: "0.8rem",
+                        fontWeight: 700,
+                      }}
+                    >
+                      {shoppingLists.length}
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-success text-white d-inline-flex align-items-center gap-1 px-3 py-1.5 fw-semibold"
+                    style={{ borderRadius: "8px" }}
+                    onClick={() => setShowCreateListModal(true)}
+                  >
+                    <FaPlus size={11} /> Create New List
+                  </button>
+                </div>
+
+                <div className="p-3 p-md-4">
+                  {shoppingListsLoading ? (
+                    <ProductGridSkeleton count={2} colClass="col-12" />
+                  ) : shoppingLists.length === 0 ? (
+                    <div className="pf-empty-state py-5 text-center">
+                      <div
+                        className="d-inline-flex align-items-center justify-content-center rounded-circle mb-3"
+                        style={{
+                          width: "72px",
+                          height: "72px",
+                          backgroundColor: "#e0f2fe",
+                          color: "#0284c7",
+                        }}
+                      >
+                        <FaListAlt size={36} />
+                      </div>
+                      <h5 className="fw-bold mb-1" style={{ color: "var(--pf-navy)" }}>
+                        No Shopping Lists Yet
+                      </h5>
+                      <p className="text-muted mb-3" style={{ fontSize: "0.9rem" }}>
+                        Create named lists like "Weekly Groceries" or "Party Supplies" and add all items to your cart in one click!
+                      </p>
+                      <button
+                        type="button"
+                        className="pf-btn pf-btn--solid"
+                        onClick={() => setShowCreateListModal(true)}
+                      >
+                        <FaPlus size={12} className="me-1" /> Create Your First List
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="d-flex flex-column gap-3">
+                      {shoppingLists.map((list) => {
+                        const items = list.items || [];
+                        const isExpanded = expandedLists[list.id] !== false;
+                        const isAddingAll = addingAllListId === list.id;
+
+                        return (
+                          <div
+                            key={list.id}
+                            className="bg-white rounded-3 overflow-hidden"
+                            style={{
+                              border: "1.5px solid #E2E8F0",
+                              boxShadow: "0 2px 8px rgba(0, 32, 78, 0.04)",
+                              borderRadius: "14px",
+                            }}
+                          >
+                            {/* List Header */}
+                            <div
+                              className="p-3 d-flex flex-wrap align-items-center justify-content-between gap-2 border-bottom"
+                              style={{ backgroundColor: "#f8fafc" }}
+                            >
+                              <div
+                                className="d-flex align-items-center gap-2"
+                                style={{ cursor: "pointer" }}
+                                onClick={() => handleToggleExpandList(list.id)}
+                              >
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-link p-0 text-muted"
+                                  aria-label="Toggle list expand"
+                                >
+                                  {isExpanded ? <FaChevronUp size={12} /> : <FaChevronDown size={12} />}
+                                </button>
+                                <div>
+                                  <h6 className="mb-0 fw-bold" style={{ color: "var(--pf-navy)" }}>
+                                    {list.name}
+                                  </h6>
+                                  <small className="text-muted" style={{ fontSize: "0.75rem" }}>
+                                    {items.length} {items.length === 1 ? "item" : "items"}
+                                  </small>
+                                </div>
+                              </div>
+
+                              <div className="d-flex align-items-center gap-2 flex-wrap">
+                                {items.length > 0 && (
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm btn-success text-white d-inline-flex align-items-center gap-1.5 py-1 px-3"
+                                    style={{ borderRadius: "8px", fontWeight: 600, fontSize: "0.82rem" }}
+                                    onClick={() => handleAddAllToCartClick(list.id)}
+                                    disabled={isAddingAll}
+                                  >
+                                    <FaShoppingCart size={12} />
+                                    {isAddingAll ? "Adding..." : "Add All to Cart"}
+                                  </button>
+                                )}
+
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1 py-1 px-2"
+                                  style={{ borderRadius: "8px", fontSize: "0.78rem" }}
+                                  onClick={() => handleStartRename(list)}
+                                  title="Rename list"
+                                >
+                                  <FaEdit size={11} /> Rename
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1 py-1 px-2"
+                                  style={{ borderRadius: "8px", fontSize: "0.78rem" }}
+                                  onClick={() => setDeletingListId(list.id)}
+                                  title="Delete list"
+                                >
+                                  <FaTrashAlt size={11} />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* List Items */}
+                            {isExpanded && (
+                              <div className="p-3">
+                                {items.length === 0 ? (
+                                  <div className="text-center py-4 text-muted small">
+                                    <p className="mb-2">This list has no items yet.</p>
+                                    <Link to="/products" className="btn btn-sm btn-outline-success py-1 px-3">
+                                      Browse Products to Add
+                                    </Link>
+                                  </div>
+                                ) : (
+                                  <div className="d-flex flex-column gap-2">
+                                    {items.map((item) => (
+                                      <div
+                                        key={item.id}
+                                        className="d-flex align-items-center justify-content-between p-2 rounded-2"
+                                        style={{ backgroundColor: "#f8fafc", border: "1px solid #f1f5f9" }}
+                                      >
+                                        <div className="d-flex align-items-center gap-2.5" style={{ minWidth: 0 }}>
+                                          <div
+                                            className="rounded overflow-hidden flex-shrink-0"
+                                            style={{
+                                              width: "44px",
+                                              height: "44px",
+                                              backgroundColor: "#fff",
+                                              border: "1px solid #e2e8f0",
+                                            }}
+                                          >
+                                            <img
+                                              src={item.image_url || FALLBACK_IMG}
+                                              alt={item.name}
+                                              className="w-100 h-100 object-fit-contain p-1"
+                                              onError={(e) => {
+                                                e.target.onerror = null;
+                                                e.target.src = FALLBACK_IMG;
+                                              }}
+                                            />
+                                          </div>
+                                          <div className="text-truncate">
+                                            <Link
+                                              to={`/product/${item.product_id}`}
+                                              className="fw-semibold text-truncate d-block text-decoration-none"
+                                              style={{ color: "var(--pf-navy)", fontSize: "0.85rem" }}
+                                            >
+                                              {item.name}
+                                            </Link>
+                                            <div
+                                              className="d-flex align-items-center gap-2 text-muted"
+                                              style={{ fontSize: "0.75rem" }}
+                                            >
+                                              <span className="fw-bold text-success">
+                                                {formatPrice(item.sale_price || item.price)}
+                                              </span>
+                                              {item.store_name && (
+                                                <Link
+                                                  to={item.vendor_id ? `/store/${item.vendor_id}` : "#"}
+                                                  className="text-truncate text-decoration-none text-muted"
+                                                  title={`Sold by ${item.store_name} - Click to visit store`}
+                                                  style={{ fontWeight: 500 }}
+                                                >
+                                                  • 🏪 {item.store_name}
+                                                </Link>
+                                              )}
+                                              {item.quantity > 1 && (
+                                                <span className="badge bg-light text-secondary border">
+                                                  Qty: {item.quantity}
+                                                </span>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </div>
+
+                                        <div className="d-flex align-items-center gap-2 flex-shrink-0 ms-2">
+                                          <button
+                                            type="button"
+                                            className="btn btn-sm btn-light text-danger p-1 rounded-circle"
+                                            style={{ width: "28px", height: "28px" }}
+                                            onClick={() => handleRemoveItem(list.id, item.product_id)}
+                                            title="Remove item from list"
+                                          >
+                                            <FaTimes size={11} />
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Security Tab */}
             {activeTab === "security" && (
               <div className="pf-card overflow-hidden">
@@ -1594,6 +2218,217 @@ const Profile = () => {
           </div>
         </div>
       )}
+
+      {/* Create Shopping List Modal */}
+      {showCreateListModal && (
+        <div
+          className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+          style={{
+            backgroundColor: "rgba(0, 32, 78, 0.45)",
+            zIndex: 1055,
+            backdropFilter: "blur(3px)",
+            padding: "1rem",
+          }}
+          onClick={() => setShowCreateListModal(false)}
+        >
+          <div
+            className="bg-white rounded-4 shadow-lg p-4"
+            style={{ width: "100%", maxWidth: "420px" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="d-flex align-items-center justify-content-between pb-2 border-bottom mb-3">
+              <h5 className="mb-0 fw-bold d-flex align-items-center gap-2" style={{ color: "var(--pf-navy)" }}>
+                <FaListAlt style={{ color: "#0284c7" }} /> Create New List
+              </h5>
+              <button
+                type="button"
+                className="btn-close"
+                onClick={() => setShowCreateListModal(false)}
+                aria-label="Close"
+              />
+            </div>
+            <form onSubmit={handleCreateListSubmit}>
+              <div className="mb-3">
+                <label className="form-label small fw-semibold text-secondary">
+                  List Name
+                </label>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="e.g. Weekly Groceries, Monthly Restock..."
+                  value={newListName}
+                  onChange={(e) => setNewListName(e.target.value)}
+                  autoFocus
+                  required
+                  maxLength={100}
+                />
+              </div>
+              <div className="d-flex justify-content-end gap-2">
+                <button
+                  type="button"
+                  className="btn btn-light"
+                  onClick={() => setShowCreateListModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-success text-white fw-semibold px-3"
+                  disabled={creatingList || !newListName.trim()}
+                >
+                  {creatingList ? "Creating..." : "Create List"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Rename Shopping List Modal */}
+      {editingListId && (
+        <div
+          className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+          style={{
+            backgroundColor: "rgba(0, 32, 78, 0.45)",
+            zIndex: 1055,
+            backdropFilter: "blur(3px)",
+            padding: "1rem",
+          }}
+          onClick={() => setEditingListId(null)}
+        >
+          <div
+            className="bg-white rounded-4 shadow-lg p-4"
+            style={{ width: "100%", maxWidth: "420px" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="d-flex align-items-center justify-content-between pb-2 border-bottom mb-3">
+              <h5 className="mb-0 fw-bold d-flex align-items-center gap-2" style={{ color: "var(--pf-navy)" }}>
+                <FaEdit style={{ color: "#0284c7" }} /> Rename Shopping List
+              </h5>
+              <button
+                type="button"
+                className="btn-close"
+                onClick={() => setEditingListId(null)}
+                aria-label="Close"
+              />
+            </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSaveRename(editingListId);
+              }}
+            >
+              <div className="mb-3">
+                <label className="form-label small fw-semibold text-secondary">
+                  New List Name
+                </label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={editingListName}
+                  onChange={(e) => setEditingListName(e.target.value)}
+                  autoFocus
+                  required
+                  maxLength={100}
+                />
+              </div>
+              <div className="d-flex justify-content-end gap-2">
+                <button
+                  type="button"
+                  className="btn btn-light"
+                  onClick={() => setEditingListId(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-success text-white fw-semibold px-3"
+                  disabled={savingRename || !editingListName.trim()}
+                >
+                  {savingRename ? "Saving..." : "Save Name"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Shopping List Confirmation Modal */}
+      {deletingListId && (
+        <div
+          className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+          style={{
+            backgroundColor: "rgba(0, 32, 78, 0.45)",
+            zIndex: 1055,
+            backdropFilter: "blur(3px)",
+            padding: "1rem",
+          }}
+          onClick={() => setDeletingListId(null)}
+        >
+          <div
+            className="bg-white rounded-4 shadow-lg p-4"
+            style={{ width: "100%", maxWidth: "420px" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="d-flex align-items-center gap-3 mb-3">
+              <div
+                className="d-flex align-items-center justify-content-center flex-shrink-0"
+                style={{
+                  width: "44px",
+                  height: "44px",
+                  borderRadius: "50%",
+                  backgroundColor: "#FEE2E2",
+                  color: "#DC2626",
+                }}
+              >
+                <FaTrashAlt size={18} />
+              </div>
+              <div>
+                <h5 className="mb-0 fw-bold" style={{ color: "var(--pf-navy)" }}>
+                  Delete Shopping List?
+                </h5>
+                <small className="text-muted">
+                  This action cannot be undone.
+                </small>
+              </div>
+            </div>
+
+            <p className="text-secondary mb-4" style={{ fontSize: "0.92rem", lineHeight: "1.5" }}>
+              Are you sure you want to delete this shopping list? All items saved within this list will be removed.
+            </p>
+
+            <div className="d-flex justify-content-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeletingListId(null)}
+                className="btn btn-light px-3 py-2 fw-semibold"
+                style={{ border: "1px solid #CBD5E1", fontSize: "0.88rem" }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleConfirmDeleteList(deletingListId)}
+                className="btn btn-danger px-3 py-2 fw-semibold d-inline-flex align-items-center gap-2"
+                style={{ fontSize: "0.88rem" }}
+              >
+                <FaTrashAlt size={13} />
+                <span>Delete List</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Support Request Modal */}
+      <OrderSupportModal
+        order={supportModalOrder}
+        isOpen={Boolean(supportModalOrder)}
+        onClose={() => setSupportModalOrder(null)}
+        onSuccess={() => {
+          showToast("Support request submitted successfully!", "success");
+        }}
+      />
     </div>
   );
 };

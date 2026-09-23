@@ -17,6 +17,7 @@ const Profile = lazy(() => import("./pages/Profile"));
 const Wishlist = lazy(() => import("./pages/Wishlist"));
 const Search = lazy(() => import("./pages/Search"));
 const LegalPage = lazy(() => import("./pages/LegalPage"));
+const StoreDetail = lazy(() => import("./pages/StoreDetail"));
 
 
 // Full-page Loading Spinner
@@ -178,6 +179,15 @@ const AppRouter = () => {
           element={
             <Layout>
               <Categories />
+            </Layout>
+          }
+        />
+
+        <Route
+          path="/store/:storeId"
+          element={
+            <Layout>
+              <StoreDetail />
             </Layout>
           }
         />

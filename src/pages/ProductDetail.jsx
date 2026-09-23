@@ -14,12 +14,17 @@ import {
   FaShieldAlt,
   FaTruck,
   FaBolt,
+  FaCheck,
+  FaList,
+  FaTags,
 } from "react-icons/fa";
 import ProductService from "../services/productService";
 import CategoryService from "../services/categoryService";
 import { useCart } from "../context/CartContext";
 import { useWishlist } from "../context/WishlistContext";
+import { useShoppingList } from "../context/ShoppingListContext";
 import { formatPrice } from "../utils/helpers";
+import { getStockInfo } from "../utils/stockUtils";
 import {
   ProductDetailSkeleton,
   ProductGridSkeleton,
@@ -41,8 +46,11 @@ const ProductDetail = () => {
   const navigate = useNavigate();
   const { cartItems, addToCart, updateQuantity, removeFromCart } = useCart();
   const { toggleWishlist, isInWishlist } = useWishlist();
+  const { openAddToListModal } = useShoppingList();
 
   const [product, setProduct] = useState(null);
+  const [selectedOffer, setSelectedOffer] = useState(null);
+  const [selectedVariant, setSelectedVariant] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [selectedImage, setSelectedImage] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -58,10 +66,25 @@ const ProductDetail = () => {
     setLoading(true);
     const result = await ProductService.getProductDetail(id);
     if (result.success) {
-      setProduct(result.data);
+      const prod = result.data;
+      setProduct(prod);
+
+      // Initialize selected edition/variant
+      const currentVar =
+        prod.variants?.find((v) => Number(v.id) === Number(prod.id)) ||
+        prod.variants?.[0] ||
+        null;
+      setSelectedVariant(currentVar);
+
+      const initialOffer =
+        prod.offers && prod.offers.length > 0
+          ? prod.offers.find((o) => Number(o.vendor_product_id) === Number(prod.id)) ||
+            prod.offers[0]
+          : null;
+      setSelectedOffer(initialOffer);
       setSelectedImage(0);
       setQuantity(1);
-      loadRelatedProducts(result.data);
+      loadRelatedProducts(prod);
     } else {
       navigate("/products");
     }
@@ -88,24 +111,132 @@ const ProductDetail = () => {
     setRelatedLoading(false);
   };
 
-  const inCartItem = cartItems?.find((i) => String(i.id) === String(product?.id));
+  const handleSelectVariant = (variant) => {
+    if (!variant || Number(variant.stock) <= 0) return;
+    setSelectedVariant(variant);
+    setQuantity(1);
+    // Update browser URL without page reload so sharing/bookmarking works
+    window.history.replaceState(null, "", `/product/${variant.id}`);
+  };
+
+  const activeProductId = selectedVariant
+    ? selectedVariant.id
+    : (selectedOffer ? selectedOffer.vendor_product_id : product?.id);
+
+  const activePrice = selectedVariant
+    ? (selectedVariant.sale_price ?? selectedVariant.price)
+    : (selectedOffer
+        ? (selectedOffer.sale_price ?? selectedOffer.price)
+        : (product?.sale_price ?? product?.price));
+
+  const activeMrp = selectedVariant
+    ? (selectedVariant.price ?? selectedVariant.sale_price)
+    : (selectedOffer ? selectedOffer.price : product?.price);
+
+  const activeItem = selectedVariant || selectedOffer || product;
+  const activeStockInfo = getStockInfo(activeItem);
+  const activeStock = activeStockInfo.stock;
+  const isStoreClosed = selectedOffer
+    ? (selectedOffer.store_status === 'closed' || Number(selectedOffer.is_holiday) === 1)
+    : (product?.store_status === 'closed' || Number(product?.is_holiday) === 1);
+
+  const activeIsAvailable = activeStockInfo.canAddToCart && !isStoreClosed;
+
+  const activeUnit = selectedVariant?.variant_name || selectedVariant?.unit || product?.unit;
+  const activeSku = selectedVariant?.sku || product?.sku;
+
+  const activeStoreName = selectedOffer ? selectedOffer.store_name : product?.store_name;
+  const activeVendorName = selectedOffer ? selectedOffer.vendor_name : product?.vendor_name;
+  const activeStoreContact = selectedOffer ? selectedOffer.store_contact : product?.store_contact;
+  const activeStoreAddress = selectedOffer ? selectedOffer.store_address : product?.store_address;
+  const activeStorePhoto = selectedOffer
+    ? selectedOffer.store_photo_url || product?.store_photo_url
+    : product?.store_photo_url;
+  const activeDistanceKm = selectedOffer ? selectedOffer.distance_km : product?.distance_km;
+  const activeVendorId = selectedOffer ? selectedOffer.vendor_id : product?.vendor_id;
+  const activeOpeningTime = selectedOffer
+    ? selectedOffer.store_opening_time
+    : product?.store_opening_time;
+  const activeClosingTime = selectedOffer
+    ? selectedOffer.store_closing_time
+    : product?.store_closing_time;
+
+  const inCartItem = cartItems?.find((i) => String(i.id) === String(activeProductId));
+
+  const getProductDisplayName = () => {
+    if (activeUnit && activeUnit !== "Standard" && !product.name.toLowerCase().includes(activeUnit.toLowerCase())) {
+      return `${product.name} (${activeUnit})`;
+    }
+    return product.name;
+  };
 
   const handleAddToCart = () => {
-    addToCart(product, quantity);
+    if (!activeIsAvailable) return;
+    addToCart(
+      {
+        id: activeProductId,
+        name: getProductDisplayName(),
+        price: activePrice,
+        sale_price: activePrice,
+        unit: activeUnit,
+        image_url: selectedVariant?.image_url || product.image_url,
+        category_name: product.category_name,
+        vendor_id: activeVendorId,
+        store_name: activeStoreName,
+      },
+      quantity,
+    );
   };
 
   const handleBuyNow = async () => {
+    if (!activeIsAvailable) return;
     if (!inCartItem) {
-      await addToCart(product, quantity, true);
+      await addToCart(
+        {
+          id: activeProductId,
+          name: getProductDisplayName(),
+          price: activePrice,
+          sale_price: activePrice,
+          unit: activeUnit,
+          image_url: selectedVariant?.image_url || product.image_url,
+          category_name: product.category_name,
+          vendor_id: activeVendorId,
+          store_name: activeStoreName,
+        },
+        quantity,
+        true,
+      );
     }
     navigate("/cart");
   };
 
   const handleQuantityChange = (change) => {
     const newQuantity = quantity + change;
-    if (newQuantity >= 1 && newQuantity <= 99) {
+    const maxStock = activeStock > 0 ? activeStock : 1;
+    if (newQuantity >= 1 && newQuantity <= Math.min(99, maxStock)) {
       setQuantity(newQuantity);
     }
+  };
+
+  const handleSelectOffer = (offer) => {
+    if (!offer.is_available || Number(offer.stock) <= 0) return;
+    setSelectedOffer(offer);
+    setQuantity(1);
+  };
+
+  const handleOpenAddToList = () => {
+    if (!product) return;
+    openAddToListModal({
+      id: activeProductId,
+      name: getProductDisplayName(),
+      price: activePrice,
+      sale_price: activePrice,
+      unit: activeUnit,
+      image_url: selectedVariant?.image_url || product.image_url,
+      category_name: product.category_name,
+      vendor_id: activeVendorId,
+      store_name: activeStoreName,
+    });
   };
 
   if (loading) {
@@ -286,6 +417,12 @@ const ProductDetail = () => {
         }
         .pd-btn-heart-icon:hover { background: #fef2f2; border-color: #fecaca; transform: scale(1.05); }
         .pd-btn-heart-icon.active { background: #fef2f2; border-color: #fca5a5; }
+        .pd-btn-list-icon {
+          width: 48px; height: 48px; border-radius: 12px; border: 1.5px solid #e2e8f0;
+          background: #fff; display: flex; align-items: center; justify-content: center;
+          cursor: pointer; flex-shrink: 0; transition: all 0.18s ease;
+        }
+        .pd-btn-list-icon:hover { background: #f0f9ff; border-color: #bae6fd; transform: scale(1.05); }
 
         /* In-cart Stepper Toggle */
         .pd-incart-toggle {
@@ -303,7 +440,7 @@ const ProductDetail = () => {
         .pd-incart-num { font-size: 1.05rem; font-weight: 800; color: ${GREEN_DEEP}; }
         .pd-incart-sub { font-size: 0.65rem; font-weight: 600; color: #166534; text-transform: uppercase; letter-spacing: 0.04em; }
 
-        /* Image floating heart button */
+        /* Image floating heart & list button */
         .pd-img-heart-btn {
           position: absolute; top: 12px; right: 12px; width: 40px; height: 40px; border-radius: 50%;
           background: rgba(255, 255, 255, 0.92); border: 1px solid #edf2f7;
@@ -312,6 +449,13 @@ const ProductDetail = () => {
         }
         .pd-img-heart-btn:hover { transform: scale(1.08); }
         .pd-img-heart-btn.active { background: #fff; box-shadow: 0 4px 12px rgba(220, 38, 38, 0.2); }
+        .pd-img-list-btn {
+          position: absolute; top: 58px; right: 12px; width: 40px; height: 40px; border-radius: 50%;
+          background: rgba(255, 255, 255, 0.92); border: 1px solid #edf2f7;
+          display: flex; align-items: center; justify-content: center; cursor: pointer;
+          box-shadow: 0 3px 10px rgba(0, 32, 78, 0.12); transition: all 0.18s ease; z-index: 5;
+        }
+        .pd-img-list-btn:hover { transform: scale(1.08); background: #fff; }
 
         /* ---------- Mobile sticky bar ---------- */
         .pd-mobile-bar {
@@ -328,6 +472,13 @@ const ProductDetail = () => {
           display: flex; align-items: center; justify-content: center; cursor: pointer;
         }
         .pd-mobile-wish.active { border-color: #dc3545; background: #fff5f5; }
+        .pd-mobile-list {
+          width: 42px; height: 42px; border-radius: 12px; flex-shrink: 0;
+          border: 1.5px solid #e2e8f0; background: #fff;
+          display: flex; align-items: center; justify-content: center; cursor: pointer;
+          transition: all 0.18s ease;
+        }
+        .pd-mobile-list:hover { background: #f0f9ff; border-color: #bae6fd; }
 
         /* ---------- Related products ---------- */
         .pd-related-section { margin-top: 1rem; }
@@ -422,6 +573,15 @@ const ProductDetail = () => {
               >
                 <FaHeart size={18} color={inWishlist ? "#dc2626" : "#64748b"} />
               </button>
+              <button
+                type="button"
+                className="pd-img-list-btn"
+                onClick={handleOpenAddToList}
+                title="Add to Shopping List"
+                aria-label="Add to shopping list"
+              >
+                <FaList size={16} color="#0369a1" />
+              </button>
             </div>
 
             {images.length > 1 && (
@@ -453,9 +613,135 @@ const ProductDetail = () => {
             <h1 className="pd-name">{product.name}</h1>
 
             <div className="pd-price-row">
-              <p className="pd-price">{formatPrice(product.price)}</p>
+              <p className="pd-price">{formatPrice(activePrice)}</p>
+              {Number(activeMrp) > Number(activePrice) && (
+                <span className="text-decoration-line-through text-muted ms-2" style={{ fontSize: "1.1rem" }}>
+                  {formatPrice(activeMrp)}
+                </span>
+              )}
+              {activeUnit && activeUnit !== "Standard" && (
+                <span className="badge bg-success-subtle text-success border border-success-subtle ms-2 px-2 py-1" style={{ fontSize: "0.82rem", fontWeight: 600 }}>
+                  {activeUnit}
+                </span>
+              )}
+              {selectedOffer?.discount_percent > 0 && (
+                <span className="badge bg-danger-subtle text-danger ms-2" style={{ fontSize: "0.78rem" }}>
+                  {selectedOffer.discount_percent}% OFF
+                </span>
+              )}
+              <span
+                className="badge ms-2"
+                style={{
+                  backgroundColor: activeStockInfo.badgeBg,
+                  color: activeStockInfo.badgeColor,
+                  border: `1px solid ${activeStockInfo.badgeBorder}`,
+                  fontSize: "0.82rem",
+                  fontWeight: 700,
+                  padding: "4px 8px",
+                  borderRadius: "8px",
+                }}
+              >
+                {activeStockInfo.badgeLabel}
+              </span>
             </div>
-            {product.sku && <p className="pd-sku">SKU: {product.sku}</p>}
+            {activeSku && <p className="pd-sku">SKU: {activeSku}</p>}
+
+            {!activeStockInfo.canAddToCart && (
+              <div
+                className="py-2 px-3 mt-2 mb-3 d-flex align-items-center gap-2"
+                style={{
+                  fontSize: "0.85rem",
+                  borderRadius: "10px",
+                  backgroundColor: activeStockInfo.badgeBg,
+                  color: activeStockInfo.badgeColor,
+                  border: `1px solid ${activeStockInfo.badgeBorder}`,
+                  fontWeight: 500,
+                }}
+              >
+                <FaShieldAlt size={14} className="flex-shrink-0" />
+                <span>{activeStockInfo.cartDisabledReason}</span>
+              </div>
+            )}
+
+            {/* Edition / Version Selector: allows customer to pick between editions */}
+            {product.variants && product.variants.length > 1 && (
+              <div
+                className="pd-variants-box mb-3 p-3 rounded"
+                style={{
+                  background: "#ffffff",
+                  border: "1.5px solid #e2e8f0",
+                  borderRadius: "14px",
+                  boxShadow: "0 2px 10px rgba(0,32,78,0.04)",
+                }}
+              >
+                <div className="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-1">
+                  <div
+                    className="fw-bold d-flex align-items-center gap-2"
+                    style={{ color: NAVY, fontSize: "0.9rem" }}
+                  >
+                    <FaTags style={{ color: GREEN }} />
+                    Available Editions / Versions ({product.variants.length})
+                  </div>
+                  <span className="text-muted small" style={{ fontSize: "0.76rem" }}>
+                    Select version to switch
+                  </span>
+                </div>
+                <div className="d-flex flex-wrap gap-2">
+                  {product.variants.map((v) => {
+                    const isSelected = Number(activeProductId) === Number(v.id);
+                    const vStockInfo = getStockInfo(v);
+                    const isOutOfStock = !vStockInfo.canAddToCart;
+                    return (
+                      <button
+                        key={v.id}
+                        type="button"
+                        onClick={() => handleSelectVariant(v)}
+                        disabled={isOutOfStock}
+                        className={`btn btn-sm d-inline-flex align-items-center gap-2 px-3 py-2 ${
+                          isSelected
+                            ? "btn-success text-white shadow-sm"
+                            : "btn-outline-secondary bg-white text-dark"
+                        }`}
+                        style={{
+                          borderRadius: "10px",
+                          fontWeight: isSelected ? 700 : 500,
+                          borderColor: isSelected ? GREEN : "#cbd5e1",
+                          borderWidth: "1.5px",
+                          opacity: isOutOfStock ? 0.55 : 1,
+                          cursor: isOutOfStock ? "not-allowed" : "pointer",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        <span>{v.variant_name || v.unit}</span>
+                        <span
+                          className={`badge ${
+                            isSelected ? "bg-white text-success" : "bg-light text-dark border"
+                          }`}
+                          style={{ fontSize: "0.76rem", fontWeight: 700 }}
+                        >
+                          {formatPrice(v.sale_price ?? v.price)}
+                        </span>
+                        {!vStockInfo.canAddToCart ? (
+                          <span
+                            className="badge py-0 px-1"
+                            style={{
+                              backgroundColor: vStockInfo.badgeBg,
+                              color: vStockInfo.badgeColor,
+                              border: `1px solid ${vStockInfo.badgeBorder}`,
+                              fontSize: "0.65rem",
+                            }}
+                          >
+                            {vStockInfo.badgeLabel}
+                          </span>
+                        ) : isSelected ? (
+                          <FaCheck size={10} className="ms-1" />
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <p className="pd-description">
               {product.description || DEFAULT_DESCRIPTION}
@@ -470,7 +756,7 @@ const ProductDetail = () => {
               </div>
             </div>
 
-            {product.store_name && (
+            {activeStoreName && (
               <div className="pd-vendor-card">
                 <div className="pd-vendor-title">
                   <FaStore size={12} /> Seller information
@@ -478,41 +764,55 @@ const ProductDetail = () => {
                 <div className="pd-vendor-body">
                   <div className="pd-vendor-photo-wrap">
                     <img
-                      src={product.store_photo_url || FALLBACK_IMG}
-                      alt={product.store_name}
+                      src={activeStorePhoto || FALLBACK_IMG}
+                      alt={activeStoreName}
                     />
                   </div>
                   <div className="flex-grow-1">
-                    <div className="pd-vendor-name">{product.store_name}</div>
-                    {product.vendor_name && (
+                    <div className="pd-vendor-name d-flex align-items-center gap-2">
+                      <Link
+                        to={`/store/${activeVendorId}`}
+                        className="text-decoration-none fw-bold"
+                        style={{ color: NAVY }}
+                        title={`Visit ${activeStoreName}`}
+                      >
+                        {activeStoreName}
+                      </Link>
+                      {selectedOffer?.ranking_badge && (
+                        <span className="badge bg-success-subtle text-success py-0 px-2" style={{ fontSize: "0.68rem" }}>
+                          {selectedOffer.ranking_badge}
+                        </span>
+                      )}
+                    </div>
+                    {activeVendorName && (
                       <div className="pd-vendor-detail">
                         <FaUser size={11} />
                         <span>
-                          <strong>Merchant:</strong> {product.vendor_name}
+                          <strong>Merchant:</strong> {activeVendorName}
                         </span>
                       </div>
                     )}
-                    {product.store_contact && (
+                    {activeStoreContact && (
                       <div className="pd-vendor-detail">
                         <FaPhone size={11} />
                         <span>
-                          <strong>Contact:</strong> {product.store_contact}
+                          <strong>Contact:</strong> {activeStoreContact}
                         </span>
                       </div>
                     )}
-                    {product.store_address && (
+                    {activeStoreAddress && (
                       <div className="pd-vendor-detail">
                         <FaMapMarkerAlt size={11} />
                         <span>
-                          <strong>Location:</strong> {product.store_address}
+                          <strong>Location:</strong> {activeStoreAddress}
                         </span>
                       </div>
                     )}
-                    {product.distance_km !== null && product.distance_km !== undefined && (
+                    {activeDistanceKm !== null && activeDistanceKm !== undefined && (
                       <div className="pd-vendor-detail">
                         <FaMapMarkerAlt size={11} style={{ color: GREEN }} />
                         <span>
-                          <strong>Distance:</strong> {product.distance_km} km away
+                          <strong>Distance:</strong> {activeDistanceKm} km away
                           {product.in_delivery_radius ? (
                             <span className="badge bg-success-subtle text-success ms-2 py-0 px-1" style={{ fontSize: '0.68rem' }}>Within Delivery Range</span>
                           ) : (
@@ -521,18 +821,248 @@ const ProductDetail = () => {
                         </span>
                       </div>
                     )}
-                    {product.store_opening_time &&
-                      product.store_closing_time && (
-                        <div className="pd-vendor-detail">
-                          <FaClock size={11} />
-                          <span>
-                            <strong>Hours:</strong>{" "}
-                            {product.store_opening_time.substring(0, 5)} -{" "}
-                            {product.store_closing_time.substring(0, 5)}
-                          </span>
-                        </div>
-                      )}
+                    {activeOpeningTime && activeClosingTime && (
+                      <div className="pd-vendor-detail">
+                        <FaClock size={11} />
+                        <span>
+                          <strong>Hours:</strong>{" "}
+                          {activeOpeningTime.substring(0, 5)} - {activeClosingTime.substring(0, 5)}
+                        </span>
+                      </div>
+                    )}
+                    {activeVendorId && (
+                      <div className="mt-2 pt-2 border-top">
+                        <Link
+                          to={`/store/${activeVendorId}`}
+                          className="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1 py-1 px-3"
+                          style={{ fontSize: "0.82rem", fontWeight: 600 }}
+                        >
+                          <FaStore size={12} /> View Store & Catalogue
+                        </Link>
+                      </div>
+                    )}
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* Store comparison table: only displayed when more than 1 store carries the product */}
+            {product.offers && product.offers.length > 1 && (
+              <div
+                className="pd-comparison-box mb-4 p-3 rounded"
+                style={{
+                  background: "#ffffff",
+                  border: "1.5px solid #e2e8f0",
+                  boxShadow: "0 2px 10px rgba(0,32,78,0.04)",
+                }}
+              >
+                <div className="d-flex align-items-center justify-content-between mb-2">
+                  <div
+                    className="fw-bold d-flex align-items-center gap-2"
+                    style={{ color: NAVY, fontSize: "0.92rem" }}
+                  >
+                    <FaStore style={{ color: GREEN }} />
+                    Store Comparison ({product.offers.length} nearby sellers)
+                  </div>
+                </div>
+                <p className="text-muted small mb-2" style={{ fontSize: "0.78rem" }}>
+                  Select an offer below to buy from that store:
+                </p>
+                <div className="table-responsive rounded border" style={{ overflowX: "auto" }}>
+                  <table className="table align-middle mb-0" style={{ fontSize: "0.82rem" }}>
+                    <thead
+                      style={{
+                        background: "#f8fafc",
+                        color: "#64748b",
+                        fontSize: "0.74rem",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.03em",
+                      }}
+                    >
+                      <tr>
+                        <th className="py-2 px-3">Store</th>
+                        <th className="py-2 px-3">Price</th>
+                        <th className="py-2 px-3">Availability</th>
+                        <th className="py-2 px-3">Fulfilment</th>
+                        <th className="py-2 px-3 text-end">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {product.offers.map((offer) => {
+                        const isSelected =
+                          selectedOffer &&
+                          Number(selectedOffer.vendor_product_id) ===
+                            Number(offer.vendor_product_id);
+                        const offerStockInfo = getStockInfo(offer);
+                        const isUnavailable = !offer.is_available || !offerStockInfo.canAddToCart;
+
+                        return (
+                          <tr
+                            key={offer.vendor_product_id}
+                            style={{
+                              backgroundColor: isSelected ? "#f0fdf4" : undefined,
+                              borderLeft: isSelected
+                                ? `4px solid ${GREEN}`
+                                : "4px solid transparent",
+                            }}
+                          >
+                            <td className="py-2 px-3">
+                              <div className="d-flex align-items-center gap-2">
+                                <div
+                                  className="rounded"
+                                  style={{
+                                    width: "32px",
+                                    height: "32px",
+                                    background: "#f1f5f9",
+                                    overflow: "hidden",
+                                    flexShrink: 0,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                  }}
+                                >
+                                  <img
+                                    src={offer.store_photo_url || FALLBACK_IMG}
+                                    alt={offer.store_name}
+                                    style={{
+                                      width: "100%",
+                                      height: "100%",
+                                      objectFit: "cover",
+                                    }}
+                                  />
+                                </div>
+                                <div>
+                                  <Link
+                                    to={`/store/${offer.vendor_id}`}
+                                    className="fw-bold d-flex align-items-center gap-1 text-decoration-none"
+                                    style={{ color: NAVY, fontSize: "0.85rem" }}
+                                    title={`Visit ${offer.store_name}`}
+                                  >
+                                    {offer.store_name}
+                                    {offer.ranking_badge && (
+                                      <span
+                                        className="badge bg-success-subtle text-success py-0 px-1"
+                                        style={{ fontSize: "0.65rem", fontWeight: 600 }}
+                                      >
+                                        {offer.ranking_badge}
+                                      </span>
+                                    )}
+                                  </Link>
+                                  <div
+                                    className="text-muted d-flex align-items-center gap-1"
+                                    style={{ fontSize: "0.72rem" }}
+                                  >
+                                    <FaMapMarkerAlt size={9} style={{ color: GREEN }} />
+                                    <span>
+                                      {offer.distance_text ||
+                                        (offer.distance_km !== null
+                                          ? `${offer.distance_km} km away`
+                                          : "Nearby")}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-2 px-3 text-nowrap">
+                              <span
+                                className="fw-bold"
+                                style={{ color: GREEN_DEEP, fontSize: "0.92rem" }}
+                              >
+                                {formatPrice(offer.sale_price ?? offer.price)}
+                              </span>
+                              {Number(offer.price) > Number(offer.sale_price) && (
+                                <div
+                                  className="text-muted text-decoration-line-through"
+                                  style={{ fontSize: "0.72rem" }}
+                                >
+                                  {formatPrice(offer.price)}
+                                </div>
+                              )}
+                            </td>
+                            <td className="py-2 px-3 text-nowrap">
+                              {!offer.is_available && offerStockInfo.canAddToCart ? (
+                                <span
+                                  className="badge bg-warning-subtle text-warning-emphasis fw-semibold"
+                                  style={{ fontSize: "0.72rem" }}
+                                >
+                                  {offer.availability || "Store Closed"}
+                                </span>
+                              ) : (
+                                <span
+                                  className="badge"
+                                  style={{
+                                    backgroundColor: offerStockInfo.badgeBg,
+                                    color: offerStockInfo.badgeColor,
+                                    border: `1px solid ${offerStockInfo.badgeBorder}`,
+                                    fontSize: "0.72rem",
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  {offerStockInfo.badgeLabel}
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2 px-3">
+                              <div
+                                className="d-flex align-items-center gap-1 text-truncate"
+                                style={{
+                                  fontSize: "0.75rem",
+                                  color: isUnavailable ? "#94a3b8" : "#475569",
+                                  maxWidth: "180px",
+                                }}
+                                title={offer.fulfilment_option}
+                              >
+                                <FaTruck
+                                  size={10}
+                                  style={{
+                                    color: isUnavailable ? "#94a3b8" : GREEN,
+                                    flexShrink: 0,
+                                  }}
+                                />
+                                <span className="text-truncate">
+                                  {offer.fulfilment_option || "Standard Delivery"}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-2 px-3 text-end text-nowrap">
+                              {isSelected ? (
+                                <span
+                                  className="badge bg-success d-inline-flex align-items-center gap-1 py-1 px-2"
+                                  style={{
+                                    fontSize: "0.75rem",
+                                    fontWeight: 600,
+                                    borderRadius: "6px",
+                                  }}
+                                >
+                                  <FaCheck size={9} /> Selected
+                                </span>
+                              ) : isUnavailable ? (
+                                <span
+                                  className="text-muted small"
+                                  style={{ fontSize: "0.75rem" }}
+                                >
+                                  {offerStockInfo.buttonLabel}
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-outline-success py-1 px-3"
+                                  style={{
+                                    fontSize: "0.75rem",
+                                    fontWeight: 600,
+                                    borderRadius: "6px",
+                                  }}
+                                  onClick={() => handleSelectOffer(offer)}
+                                >
+                                  Select
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )}
@@ -553,7 +1083,7 @@ const ProductDetail = () => {
                   <button
                     className="pd-qty-btn"
                     onClick={() => handleQuantityChange(1)}
-                    disabled={quantity >= 99}
+                    disabled={quantity >= Math.min(99, activeStock > 0 ? activeStock : 1)}
                     aria-label="Increase quantity"
                   >
                     <FaPlus size={11} />
@@ -570,9 +1100,9 @@ const ProductDetail = () => {
                     className="pd-incart-btn"
                     onClick={() => {
                       if (inCartItem.quantity > 1) {
-                        updateQuantity(product.id, inCartItem.quantity - 1);
+                        updateQuantity(activeProductId, inCartItem.quantity - 1);
                       } else {
-                        removeFromCart(product.id);
+                        removeFromCart(activeProductId);
                       }
                     }}
                     aria-label="Decrease quantity"
@@ -585,23 +1115,45 @@ const ProductDetail = () => {
                   </div>
                   <button
                     className="pd-incart-btn"
-                    onClick={() => updateQuantity(product.id, inCartItem.quantity + 1)}
-                    disabled={inCartItem.quantity >= 99}
+                    onClick={() =>
+                      updateQuantity(activeProductId, inCartItem.quantity + 1)
+                    }
+                    disabled={
+                      inCartItem.quantity >= Math.min(99, activeStock > 0 ? activeStock : 1)
+                    }
                     aria-label="Increase quantity"
                   >
                     <FaPlus size={12} />
                   </button>
                 </div>
               ) : (
-                <button className="pd-btn-cta" onClick={handleAddToCart}>
+                <button
+                  className="pd-btn-cta"
+                  onClick={handleAddToCart}
+                  disabled={!activeIsAvailable}
+                  title={!activeIsAvailable ? (isStoreClosed ? "This store is currently closed" : activeStockInfo.cartDisabledReason) : ""}
+                  style={{
+                    opacity: !activeIsAvailable ? 0.6 : 1,
+                    cursor: !activeIsAvailable ? "not-allowed" : "pointer",
+                  }}
+                >
                   <FaShoppingCart size={15} />
-                  Add to Cart
+                  {isStoreClosed ? "Store Closed" : (activeIsAvailable ? "Add to Cart" : activeStockInfo.buttonLabel)}
                 </button>
               )}
 
-              <button className="pd-btn-buy" onClick={handleBuyNow}>
+              <button
+                className="pd-btn-buy"
+                onClick={handleBuyNow}
+                disabled={!activeIsAvailable}
+                title={!activeIsAvailable ? (isStoreClosed ? "This store is currently closed" : activeStockInfo.cartDisabledReason) : ""}
+                style={{
+                  opacity: !activeIsAvailable ? 0.6 : 1,
+                  cursor: !activeIsAvailable ? "not-allowed" : "pointer",
+                }}
+              >
                 <FaBolt size={14} />
-                Buy Now
+                {isStoreClosed ? "Store Closed" : (activeIsAvailable ? "Buy Now" : activeStockInfo.buttonLabel)}
               </button>
 
               <button
@@ -613,57 +1165,17 @@ const ProductDetail = () => {
               >
                 <FaHeart size={19} color={inWishlist ? "#dc2626" : "#94a3b8"} />
               </button>
-            </div>
 
-            {product.alternatives && product.alternatives.length > 0 && (
-              <div className="pd-alternatives-box mt-3 p-3 rounded" style={{ background: "#f8fafc", border: "1.5px solid #e2e8f0" }}>
-                <div className="fw-bold d-flex align-items-center gap-1 mb-2" style={{ color: NAVY, fontSize: "0.88rem" }}>
-                  <FaStore size={12} style={{ color: GREEN }} />
-                  Also available from {product.alternatives.length} other nearby seller{product.alternatives.length > 1 ? "s" : ""}
-                </div>
-                <div className="d-flex flex-column gap-2">
-                  {product.alternatives.map((alt) => (
-                    <div
-                      key={alt.vendor_product_id}
-                      className="d-flex justify-content-between align-items-center p-2 rounded bg-white"
-                      style={{ border: "1px solid #edf2f7" }}
-                    >
-                      <div className="me-2" style={{ minWidth: 0 }}>
-                        <div className="fw-bold text-truncate" style={{ color: NAVY, fontSize: "0.85rem" }}>
-                          {alt.store_name || alt.vendor_name}
-                        </div>
-                        <div className="text-muted d-flex align-items-center gap-2" style={{ fontSize: "0.75rem" }}>
-                          <span>{alt.distance_km} km away</span>
-                          <span>•</span>
-                          <span className="text-success fw-medium">Stock: {alt.stock}</span>
-                        </div>
-                      </div>
-                      <div className="d-flex align-items-center gap-2 flex-shrink-0">
-                        <span className="fw-bold" style={{ color: GREEN, fontSize: "0.95rem" }}>
-                          {formatPrice(alt.sale_price ?? alt.price)}
-                        </span>
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-outline-success"
-                          style={{ fontSize: "0.75rem" }}
-                          onClick={() => addToCart({
-                            id: alt.vendor_product_id,
-                            name: product.name,
-                            price: alt.sale_price ?? alt.price,
-                            sale_price: alt.sale_price ?? alt.price,
-                            image_url: product.image_url,
-                            category_name: product.category_name,
-                          })}
-                        >
-                          <FaShoppingCart size={11} className="me-1" />
-                          Add
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+              <button
+                type="button"
+                className="pd-btn-list-icon"
+                onClick={handleOpenAddToList}
+                title="Add to Shopping List"
+                aria-label="Add to Shopping List"
+              >
+                <FaList size={17} color="#0369a1" />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -739,7 +1251,16 @@ const ProductDetail = () => {
         >
           <FaHeart size={18} color={inWishlist ? "#dc2626" : "#94a3b8"} />
         </button>
-        <span className="pd-mobile-price">{formatPrice(product.price)}</span>
+        <button
+          type="button"
+          className="pd-mobile-list"
+          onClick={handleOpenAddToList}
+          aria-label="Add to shopping list"
+          title="Add to shopping list"
+        >
+          <FaList size={16} color="#0369a1" />
+        </button>
+        <span className="pd-mobile-price">{formatPrice(activePrice)}</span>
         {inCartItem ? (
           <div className="pd-incart-toggle" style={{ height: "42px", minWidth: "115px" }}>
             <button
@@ -747,9 +1268,9 @@ const ProductDetail = () => {
               style={{ width: "32px", height: "32px" }}
               onClick={() => {
                 if (inCartItem.quantity > 1) {
-                  updateQuantity(product.id, inCartItem.quantity - 1);
+                  updateQuantity(activeProductId, inCartItem.quantity - 1);
                 } else {
-                  removeFromCart(product.id);
+                  removeFromCart(activeProductId);
                 }
               }}
               aria-label="Decrease quantity"
@@ -763,8 +1284,8 @@ const ProductDetail = () => {
             <button
               className="pd-incart-btn"
               style={{ width: "32px", height: "32px" }}
-              onClick={() => updateQuantity(product.id, inCartItem.quantity + 1)}
-              disabled={inCartItem.quantity >= 99}
+              onClick={() => updateQuantity(activeProductId, inCartItem.quantity + 1)}
+              disabled={inCartItem.quantity >= Math.min(99, activeStock > 0 ? activeStock : 1)}
               aria-label="Increase quantity"
             >
               <FaPlus size={10} />
@@ -773,20 +1294,36 @@ const ProductDetail = () => {
         ) : (
           <button
             className="pd-btn-cta"
-            style={{ height: "42px", padding: "0 0.85rem", fontSize: "0.85rem" }}
+            style={{
+              height: "42px",
+              padding: "0 0.85rem",
+              fontSize: "0.85rem",
+              opacity: !activeIsAvailable ? 0.6 : 1,
+              cursor: !activeIsAvailable ? "not-allowed" : "pointer",
+            }}
             onClick={handleAddToCart}
+            disabled={!activeIsAvailable}
+            title={!activeIsAvailable ? (isStoreClosed ? "This store is currently closed" : activeStockInfo.cartDisabledReason) : ""}
           >
             <FaShoppingCart size={13} />
-            Add
+            {isStoreClosed ? "Closed" : (activeIsAvailable ? "Add" : activeStockInfo.buttonLabel)}
           </button>
         )}
         <button
           className="pd-btn-buy"
-          style={{ height: "42px", padding: "0 0.85rem", fontSize: "0.85rem" }}
+          style={{
+            height: "42px",
+            padding: "0 0.85rem",
+            fontSize: "0.85rem",
+            opacity: !activeIsAvailable ? 0.6 : 1,
+            cursor: !activeIsAvailable ? "not-allowed" : "pointer",
+          }}
           onClick={handleBuyNow}
+          disabled={!activeIsAvailable}
+          title={!activeIsAvailable ? (isStoreClosed ? "This store is currently closed" : activeStockInfo.cartDisabledReason) : ""}
         >
           <FaBolt size={12} />
-          Buy Now
+          {isStoreClosed ? "Closed" : (activeIsAvailable ? "Buy Now" : activeStockInfo.buttonLabel)}
         </button>
       </div>
     </div>

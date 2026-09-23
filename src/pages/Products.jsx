@@ -11,6 +11,7 @@ import {
   FaCheck,
   FaChevronRight,
   FaStore,
+  FaTags,
 } from "react-icons/fa";
 import ProductService from "../services/productService";
 import CategoryService from "../services/categoryService";
@@ -20,6 +21,7 @@ import { ProductGridSkeleton } from "../components/SkeletonLoaders";
 import { useCart } from "../context/CartContext";
 import { useWishlist } from "../context/WishlistContext";
 import { formatPrice } from "../utils/helpers";
+import { getStockInfo } from "../utils/stockUtils";
 
 const NAVY = "#00204E";
 const GREEN = "#34A129";
@@ -241,6 +243,22 @@ const Products = () => {
       return true;
     })
     .sort((a, b) => {
+      const aInfo = getStockInfo(a);
+      const bInfo = getStockInfo(b);
+      const aUnavail =
+        !aInfo.canAddToCart ||
+        aInfo.state === "out_of_stock" ||
+        aInfo.state === "temporarily_unavailable";
+      const bUnavail =
+        !bInfo.canAddToCart ||
+        bInfo.state === "out_of_stock" ||
+        bInfo.state === "temporarily_unavailable";
+
+      // Always show unavailable products at last
+      if (aUnavail !== bUnavail) {
+        return aUnavail ? 1 : -1;
+      }
+
       switch (sortBy) {
         case "price_asc":
           return parseFloat(a.price) - parseFloat(b.price);
@@ -613,142 +631,247 @@ const Products = () => {
           )
         ) : viewMode === "grid" ? (
           <div className="row g-3 g-md-4">
-            {filteredProducts.map((product) => (
-              <div key={product.id} className="col-6 col-md-4 col-lg-3">
-                <div className="pr-card card">
-                  <div className="pr-img-wrap">
-                    <Link to={`/product/${product.id}`}>
-                      <img
-                        src={product.image_url || FALLBACK_IMG}
-                        alt={product.name}
-                        loading="lazy"
-                      />
-                    </Link>
-                    <button
-                      className="pr-wish-btn"
-                      onClick={() => toggleWishlist(product)}
-                      aria-label="Add to wishlist"
-                    >
-                      <FaHeart
-                        size={15}
-                        className={
-                          isInWishlist(product.id)
-                            ? "text-danger"
-                            : "text-muted"
-                        }
-                      />
-                    </button>
-                  </div>
-
-                  <div className="card-body pb-2">
-                    <Link
-                      to={`/product/${product.id}`}
-                      className="text-decoration-none pr-name d-block mb-1"
-                    >
-                      {product.name}
-                    </Link>
-                    {product.category_name && (
-                      <p className="text-muted small mb-1">
-                        {product.category_name}
-                      </p>
-                    )}
-                    <span className="pr-price fs-6">
-                      {formatPrice(product.sale_price ?? product.price)}
-                    </span>
-                    <div className="text-muted small mt-1 d-flex align-items-center gap-1" style={{ fontSize: "0.72rem" }}>
-                      <FaStore size={10} className="text-secondary flex-shrink-0" />
-                      <span className="text-truncate">
-                        Sold by <strong>{product.store_name || product.vendor_name || "Verified Store"}</strong>
-                        {product.distance_km !== undefined && product.distance_km !== null ? ` • ${product.distance_km} km away` : ""}
-                      </span>
+            {filteredProducts.map((product) => {
+              const stockInfo = getStockInfo(product);
+              return (
+                <div key={product.id} className="col-6 col-md-4 col-lg-3">
+                  <div className="pr-card card">
+                    <div className="pr-img-wrap">
+                      <Link to={`/product/${product.id}`}>
+                        <img
+                          src={product.image_url || FALLBACK_IMG}
+                          alt={product.name}
+                          loading="lazy"
+                        />
+                      </Link>
+                      <button
+                        className="pr-wish-btn"
+                        onClick={() => toggleWishlist(product)}
+                        aria-label="Add to wishlist"
+                      >
+                        <FaHeart
+                          size={15}
+                          className={
+                            isInWishlist(product.id)
+                              ? "text-danger"
+                              : "text-muted"
+                          }
+                        />
+                      </button>
                     </div>
-                    <AlternativeSellers product={product} />
-                  </div>
 
-                  <div className="card-footer bg-white border-0 pt-0">
-                    <button
-                      className="btn pr-btn-cta text-white w-100 btn-sm"
-                      onClick={() => addToCart(product)}
-                    >
-                      <FaShoppingCart className="me-2" size={13} /> Add to Cart
-                    </button>
+                    <div className="card-body pb-2">
+                      <Link
+                        to={`/product/${product.id}`}
+                        className="text-decoration-none pr-name d-block mb-1"
+                      >
+                        {product.name}
+                      </Link>
+                      {product.category_name && (
+                        <p className="text-muted small mb-1">
+                          {product.category_name}
+                        </p>
+                      )}
+                      <div className="d-flex align-items-center gap-1 flex-wrap">
+                        <span className="pr-price fs-6">
+                          {product.has_variants ? "From " : ""}{formatPrice(product.sale_price ?? product.price)}
+                        </span>
+                        {product.has_variants ? (
+                          <span className="badge bg-success-subtle text-success border border-success-subtle py-0 px-1" style={{ fontSize: "0.68rem" }}>
+                            {product.variant_count || product.variants?.length} Editions
+                          </span>
+                        ) : product.unit && product.unit !== "Standard" ? (
+                          <span className="badge bg-light text-secondary border py-0 px-1" style={{ fontSize: "0.68rem" }}>
+                            {product.unit}
+                          </span>
+                        ) : null}
+                        <span
+                          className="badge py-0 px-1"
+                          style={{
+                            backgroundColor: stockInfo.badgeBg,
+                            color: stockInfo.badgeColor,
+                            border: `1px solid ${stockInfo.badgeBorder}`,
+                            fontSize: "0.68rem",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {stockInfo.badgeLabel}
+                        </span>
+                      </div>
+                      <div className="text-muted small mt-1 d-flex align-items-center gap-1" style={{ fontSize: "0.72rem" }}>
+                        <FaStore size={10} className="text-secondary flex-shrink-0" />
+                        <span className="text-truncate">
+                          Sold by{" "}
+                          <Link
+                            to={`/store/${product.vendor_id}`}
+                            className="text-decoration-none fw-bold"
+                            style={{ color: "#00204E" }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {product.store_name || product.vendor_name || "Verified Store"}
+                          </Link>
+                          {product.distance_km !== undefined && product.distance_km !== null ? ` • ${product.distance_km} km away` : ""}
+                        </span>
+                      </div>
+                      <AlternativeSellers product={product} />
+                    </div>
+
+                    <div className="card-footer bg-white border-0 pt-0">
+                      {product.has_variants ? (
+                        <Link
+                          to={`/product/${product.id}`}
+                          className="btn btn-outline-success w-100 btn-sm fw-bold d-flex align-items-center justify-content-center gap-1"
+                          style={{ borderRadius: "8px" }}
+                        >
+                          <FaTags size={11} /> Choose Edition
+                        </Link>
+                      ) : !stockInfo.canAddToCart ? (
+                        <button
+                          className="btn btn-secondary w-100 btn-sm text-white"
+                          disabled
+                          title={stockInfo.cartDisabledReason}
+                          style={{ opacity: 0.65, cursor: "not-allowed", borderRadius: "8px" }}
+                        >
+                          {stockInfo.buttonLabel}
+                        </button>
+                      ) : (
+                        <button
+                          className="btn pr-btn-cta text-white w-100 btn-sm"
+                          onClick={() => addToCart(product)}
+                        >
+                          <FaShoppingCart className="me-2" size={13} /> Add to Cart
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="d-flex flex-column gap-3">
-            {filteredProducts.map((product) => (
-              <div className="pr-card card" key={product.id}>
-                <div className="row g-0 align-items-center">
-                  <div className="col-4 col-md-2 p-2">
-                    <Link
-                      to={`/product/${product.id}`}
-                      className="pr-list-img d-block"
-                    >
-                      <img
-                        src={product.image_url || FALLBACK_IMG}
-                        alt={product.name}
-                        loading="lazy"
-                      />
-                    </Link>
-                  </div>
-                  <div className="col-8 col-md-10">
-                    <div className="card-body py-2">
-                      <div className="d-flex justify-content-between align-items-start gap-2">
-                        <div className="flex-grow-1">
+            {filteredProducts.map((product) => {
+              const stockInfo = getStockInfo(product);
+              return (
+                <div className="pr-card card" key={product.id}>
+                  <div className="row g-0 align-items-center">
+                    <div className="col-4 col-md-2 p-2">
+                      <Link
+                        to={`/product/${product.id}`}
+                        className="pr-list-img d-block"
+                      >
+                        <img
+                          src={product.image_url || FALLBACK_IMG}
+                          alt={product.name}
+                          loading="lazy"
+                        />
+                      </Link>
+                    </div>
+                    <div className="col-8 col-md-10">
+                      <div className="card-body py-2">
+                        <div className="d-flex justify-content-between align-items-start gap-2">
+                          <div className="flex-grow-1">
+                            <Link
+                              to={`/product/${product.id}`}
+                              className="text-decoration-none pr-name d-block"
+                              style={{ WebkitLineClamp: 1, minHeight: "auto" }}
+                            >
+                              {product.name}
+                            </Link>
+                            {product.category_name && (
+                              <p className="text-muted small mb-1">
+                                {product.category_name}
+                              </p>
+                            )}
+                            <div className="d-flex align-items-center gap-1 flex-wrap">
+                              <span className="pr-price fs-6">
+                                {product.has_variants ? "From " : ""}{formatPrice(product.sale_price ?? product.price)}
+                              </span>
+                              {product.has_variants ? (
+                                <span className="badge bg-success-subtle text-success border border-success-subtle py-0 px-1" style={{ fontSize: "0.68rem" }}>
+                                  {product.variant_count || product.variants?.length} Editions
+                                </span>
+                              ) : product.unit && product.unit !== "Standard" ? (
+                                <span className="badge bg-light text-secondary border py-0 px-1" style={{ fontSize: "0.68rem" }}>
+                                  {product.unit}
+                                </span>
+                              ) : null}
+                              <span
+                                className="badge py-0 px-1"
+                                style={{
+                                  backgroundColor: stockInfo.badgeBg,
+                                  color: stockInfo.badgeColor,
+                                  border: `1px solid ${stockInfo.badgeBorder}`,
+                                  fontSize: "0.68rem",
+                                  fontWeight: 600,
+                                }}
+                              >
+                                {stockInfo.badgeLabel}
+                              </span>
+                            </div>
+                            <div className="text-muted small mt-1 d-flex align-items-center gap-1" style={{ fontSize: "0.74rem" }}>
+                              <FaStore size={11} className="text-secondary flex-shrink-0" />
+                              <span>
+                                Sold by{" "}
+                                <Link
+                                  to={`/store/${product.vendor_id}`}
+                                  className="text-decoration-none fw-bold"
+                                  style={{ color: "#00204E" }}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {product.store_name || product.vendor_name || "Verified Store"}
+                                </Link>
+                                {product.distance_km !== undefined && product.distance_km !== null ? ` • ${product.distance_km} km away` : ""}
+                              </span>
+                            </div>
+                            <AlternativeSellers product={product} />
+                          </div>
+                          <button
+                            className="btn btn-link p-0"
+                            onClick={() => toggleWishlist(product)}
+                            aria-label="Add to wishlist"
+                          >
+                            <FaHeart
+                              size={18}
+                              className={
+                                isInWishlist(product.id)
+                                  ? "text-danger"
+                                  : "text-muted"
+                              }
+                            />
+                          </button>
+                        </div>
+                        {product.has_variants ? (
                           <Link
                             to={`/product/${product.id}`}
-                            className="text-decoration-none pr-name d-block"
-                            style={{ WebkitLineClamp: 1, minHeight: "auto" }}
+                            className="btn btn-outline-success btn-sm mt-2 fw-bold d-inline-flex align-items-center gap-1 px-3"
+                            style={{ borderRadius: "8px" }}
                           >
-                            {product.name}
+                            <FaTags size={11} /> Choose Edition
                           </Link>
-                          {product.category_name && (
-                            <p className="text-muted small mb-1">
-                              {product.category_name}
-                            </p>
-                          )}
-                          <span className="pr-price fs-6">
-                            {formatPrice(product.sale_price ?? product.price)}
-                          </span>
-                          <div className="text-muted small mt-1 d-flex align-items-center gap-1" style={{ fontSize: "0.74rem" }}>
-                            <FaStore size={11} className="text-secondary flex-shrink-0" />
-                            <span>
-                              Sold by <strong>{product.store_name || product.vendor_name || "Verified Store"}</strong>
-                              {product.distance_km !== undefined && product.distance_km !== null ? ` • ${product.distance_km} km away` : ""}
-                            </span>
-                          </div>
-                          <AlternativeSellers product={product} />
-                        </div>
-                        <button
-                          className="btn btn-link p-0"
-                          onClick={() => toggleWishlist(product)}
-                          aria-label="Add to wishlist"
-                        >
-                          <FaHeart
-                            size={18}
-                            className={
-                              isInWishlist(product.id)
-                                ? "text-danger"
-                                : "text-muted"
-                            }
-                          />
-                        </button>
+                        ) : !stockInfo.canAddToCart ? (
+                          <button
+                            className="btn btn-secondary btn-sm mt-2 text-white"
+                            disabled
+                            title={stockInfo.cartDisabledReason}
+                            style={{ opacity: 0.65, cursor: "not-allowed", borderRadius: "8px" }}
+                          >
+                            {stockInfo.buttonLabel}
+                          </button>
+                        ) : (
+                          <button
+                            className="btn pr-btn-cta text-white btn-sm mt-2"
+                            onClick={() => addToCart(product)}
+                          >
+                            <FaShoppingCart className="me-2" size={13} /> Add to Cart
+                          </button>
+                        )}
                       </div>
-                      <button
-                        className="btn pr-btn-cta text-white btn-sm mt-2"
-                        onClick={() => addToCart(product)}
-                      >
-                        <FaShoppingCart className="me-2" size={13} /> Add to
-                        Cart
-                      </button>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
