@@ -15,6 +15,7 @@ import {
   FaTags,
 } from "react-icons/fa";
 import AuthService from "../services/authService";
+import HeroSlider from "../components/HeroSlider";
 import NoVendorsEmptyState from "../components/NoVendorsEmptyState";
 import {
   ProductGridSkeleton,
@@ -40,8 +41,20 @@ const Home = () => {
   const [nearbyStores, setNearbyStores] = useState([]);
   const [loading, setLoading] = useState(true);
   const [noNearbyVendors, setNoNearbyVendors] = useState(false);
+  const [heroContent, setHeroContent] = useState({
+    title: "Delicious Food & Beverages",
+    subtitle: "Delivered to Your Door",
+    description:
+      "Discover premium quality food and beverages. Fresh, organic, and delivered with care.",
+    btn_text: "Shop Now",
+    btn_link: "/products",
+    btn2_text: "Explore Products",
+    btn2_link: "#featured",
+  });
+  const [heroSliders, setHeroSliders] = useState([]);
 
   useEffect(() => {
+    loadHeroData();
     loadHomeData();
 
     // Request customer's current live location on every visit
@@ -65,6 +78,22 @@ const Home = () => {
     }
   }, []);
 
+  const loadHeroData = async () => {
+    try {
+      const res = await AuthService.getHeroSection();
+      if (res.success && res.data) {
+        if (res.data.content) {
+          setHeroContent(res.data.content);
+        }
+        if (res.data.sliders && res.data.sliders.length > 0) {
+          setHeroSliders(res.data.sliders);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load hero data:", err);
+    }
+  };
+
   const loadHomeData = async () => {
     setLoading(true);
     let lat = undefined;
@@ -82,6 +111,12 @@ const Home = () => {
 
     const result = await AuthService.getHomeData({ latitude: lat, longitude: lng });
     if (result.success) {
+      if (result.data.hero) {
+        if (result.data.hero.content) setHeroContent(result.data.hero.content);
+        if (result.data.hero.sliders && result.data.hero.sliders.length > 0) {
+          setHeroSliders(result.data.hero.sliders);
+        }
+      }
       // Home page must strictly show only in-stock products (no Unavailable, no Only X left)
       const inStockProducts = (result.data.products || []).filter(
         (p) => getStockInfo(p).state === "available"
@@ -323,23 +358,47 @@ const Home = () => {
           <div className="row align-items-center g-4">
             <div className="col-lg-6 order-2 order-lg-1">
               <h1 className="hm-hero-title mb-3">
-                Delicious Food &amp; Beverages
-                <span className="hm-hero-accent">Delivered to Your Door</span>
+                {heroContent.title || "Delicious Food & Beverages"}{" "}
+                {heroContent.subtitle && (
+                  <span className="hm-hero-accent">{heroContent.subtitle}</span>
+                )}
               </h1>
               <p className="hm-hero-lead mb-4">
-                Discover premium quality food and beverages. Fresh, organic, and
-                delivered with care.
+                {heroContent.description ||
+                  "Discover premium quality food and beverages. Fresh, organic, and delivered with care."}
               </p>
               <div className="d-flex gap-3 flex-wrap">
-                <Link
-                  to="/products"
-                  className="btn hm-btn-cta btn-lg px-4 text-white"
-                >
-                  Shop Now <FaArrowRight className="ms-2" />
-                </Link>
-                <a href="#featured" className="btn hm-btn-ghost btn-lg px-4">
-                  Explore Products
-                </a>
+                {heroContent.btn_link?.startsWith("#") ? (
+                  <a
+                    href={heroContent.btn_link}
+                    className="btn hm-btn-cta btn-lg px-4 text-white"
+                  >
+                    {heroContent.btn_text || "Shop Now"} <FaArrowRight className="ms-2" />
+                  </a>
+                ) : (
+                  <Link
+                    to={heroContent.btn_link || "/products"}
+                    className="btn hm-btn-cta btn-lg px-4 text-white"
+                  >
+                    {heroContent.btn_text || "Shop Now"} <FaArrowRight className="ms-2" />
+                  </Link>
+                )}
+
+                {heroContent.btn2_link?.startsWith("#") ? (
+                  <a
+                    href={heroContent.btn2_link}
+                    className="btn hm-btn-ghost btn-lg px-4"
+                  >
+                    {heroContent.btn2_text || "Explore Products"}
+                  </a>
+                ) : (
+                  <Link
+                    to={heroContent.btn2_link || "/products"}
+                    className="btn hm-btn-ghost btn-lg px-4"
+                  >
+                    {heroContent.btn2_text || "Explore Products"}
+                  </Link>
+                )}
               </div>
 
               <div className="row hm-stats g-3">
@@ -359,10 +418,9 @@ const Home = () => {
             </div>
 
             <div className="col-lg-6 order-1 order-lg-2">
-              <img
-                src="https://images.unsplash.com/photo-1542838132-92c53300491e?w=700"
-                alt="Fresh Food"
-                className="img-fluid hm-hero-img w-100"
+              <HeroSlider
+                slides={heroSliders}
+                fallbackImg={FALLBACK_IMG}
               />
             </div>
           </div>

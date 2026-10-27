@@ -123,6 +123,11 @@ const AuthService = {
       }),
     );
   },
+
+  getHeroSection: async () => {
+    return call(axiosInstance.get("/get_hero_section"));
+  },
 };
 
 export default AuthService;
+

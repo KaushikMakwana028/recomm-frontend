@@ -493,7 +493,7 @@ const Header = () => {
             <strong className="text-white">NO HASSLE</strong>
           </span>
           <div className="d-flex gap-3">
-            <a href="tel:+91 (0261) 234-5678">📞 +91 (0261) 234-5678</a>
+            <a href="tel:+91 8140093974">📞 +91 8140093974</a>
             <a href="mailto:grievance@recomm.in">📧 grievance@recomm.in</a>
           </div>
         </div>
